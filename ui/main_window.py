@@ -437,6 +437,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("[R] Retry", self.retry_selected)
         menu.addAction("[F] Force Redownload", self.force_redownload_selected)
+        menu.addAction("[E] Re-extract Archive", self.reextract_selected)
         menu.addAction("Copy Error Details", self.copy_selected_error_log)
         menu.addSeparator()
         menu.addAction("Delete", self.delete_selected)
@@ -834,7 +835,16 @@ class MainWindow(QMainWindow):
         if not text:
             return
             
-        extracted_urls = re.findall(r'https?://[^\s"<>\']+', text)
+        # Clean leading list markers (e.g. "- https://", "* https://", "1. https://") per line
+        cleaned_lines = []
+        for line in text.splitlines():
+            line_str = line.strip()
+            # Strip common list prefixes before searching
+            line_str = re.sub(r'^[-\*\d\.]+\s+', '', line_str)
+            cleaned_lines.append(line_str)
+        sanitized_text = "\n".join(cleaned_lines)
+        
+        extracted_urls = re.findall(r'https?://[^\s"<>\']+', sanitized_text)
         
         ff_links = [u.rstrip('"\';>,') for u in extracted_urls if "fuckingfast.co" in u]
         web_urls = [u.rstrip('"\';>,') for u in extracted_urls if "fuckingfast.co" not in u]
@@ -1020,6 +1030,33 @@ class MainWindow(QMainWindow):
             return
 
         active_statuses = {TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING, TaskStatus.PAUSING, TaskStatus.UNPACKING}
+        
+        # Check if confirmation is needed (e.g. any completed, extracted, or partially downloaded files)
+        completed_or_downloaded = [t for t in tasks_to_redownload if t.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED) or t.progress > 0]
+        
+        if completed_or_downloaded:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle("Confirm Force Redownload")
+            msg_box.setText(
+                f"You have selected {len(tasks_to_redownload)} task(s), including {len(completed_or_downloaded)} completed/partially downloaded file(s).\n\n"
+                "Force redownloading will permanently DELETE existing files from disk and restart downloading from 0%."
+            )
+            btn_all = msg_box.addButton("Redownload All Selected", QMessageBox.ButtonRole.AcceptRole)
+            btn_failed_only = msg_box.addButton("Redownload Failed Tasks Only", QMessageBox.ButtonRole.ActionRole)
+            btn_cancel = msg_box.addButton(QMessageBox.StandardButton.Cancel)
+            
+            msg_box.exec()
+            clicked_btn = msg_box.clickedButton()
+            
+            if clicked_btn == btn_cancel:
+                return
+            elif clicked_btn == btn_failed_only:
+                tasks_to_redownload = [t for t in tasks_to_redownload if t.status in (TaskStatus.FAILED, TaskStatus.EXTRACT_ERROR, TaskStatus.ERROR_DIRECT_LINK)]
+                if not tasks_to_redownload:
+                    QMessageBox.information(self, "No Failed Tasks", "None of the selected tasks were in a failed state.")
+                    return
+
         redownloaded = 0
         skipped = 0
         failed = 0
@@ -1049,12 +1086,27 @@ class MainWindow(QMainWindow):
             self.extracted_folders.discard(task.folder_name)
             redownloaded += 1
 
-        if skipped or failed or redownloaded == 0:
-            QMessageBox.information(
-                self,
-                "Force Redownload",
-                f"Queued: {redownloaded}\nSkipped active tasks: {skipped}\nFailed: {failed}"
-            )
+    def reextract_selected(self):
+        selected_tasks = self.get_selected_tasks()
+        if not selected_tasks:
+            QMessageBox.information(self, "No Selection", "Select a task or batch folder to re-extract.")
+            return
+
+        target_folders = set(t.folder_name for t in selected_tasks)
+        reextracted_count = 0
+
+        for folder_name in target_folders:
+            folder_tasks = [t for t in self.tasks if t.folder_name == folder_name]
+            if not folder_tasks:
+                continue
+
+            # Remove from extracted tracking so extract_folder runs
+            self.extracted_folders.discard(folder_name)
+            threading.Thread(target=self.extract_folder, args=(folder_tasks,), daemon=True).start()
+            reextracted_count += 1
+
+        if reextracted_count > 0:
+            QMessageBox.information(self, "Re-extracting", f"Triggered re-extraction for {reextracted_count} batch folder(s).")
 
     def delete_selected(self):
         tasks_to_delete = self.get_selected_tasks()
@@ -1523,7 +1575,10 @@ class MainWindow(QMainWindow):
             with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
                 if r.status_code not in (200, 206):
                     task.status = TaskStatus.FAILED
-                    task.error_message = f"Download request failed. Server returned HTTP {r.status_code}."
+                    if r.status_code == 403:
+                        task.error_message = f"HTTP 403 (Forbidden): Cloudflare anti-bot blocked your connection. Try toggling your VPN or changing DNS (1.1.1.1)."
+                    else:
+                        task.error_message = f"Download request failed. Server returned HTTP {r.status_code}."
                     if r.status_code in (403, 503):
                         preview = r.text[:500] if hasattr(r, 'text') else "No text body"
                         logging.error(f"Download 403/503 for {dl_url}. Body preview: {preview}")
