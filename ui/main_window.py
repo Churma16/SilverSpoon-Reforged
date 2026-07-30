@@ -372,7 +372,13 @@ class MainWindow(QMainWindow):
         
         self.extract_checkbox = QCheckBox("Extract after download")
         self.extract_checkbox.setChecked(self.settings.get("extract_after_download", False))
+        self.extract_checkbox.stateChanged.connect(lambda: self.save_setting_key("extract_after_download", self.extract_checkbox.isChecked()))
         action_layout.addWidget(self.extract_checkbox)
+
+        self.shutdown_checkbox = QCheckBox("Auto-shutdown when done")
+        self.shutdown_checkbox.setChecked(self.settings.get("auto_shutdown_on_completion", False))
+        self.shutdown_checkbox.stateChanged.connect(lambda: self.save_setting_key("auto_shutdown_on_completion", self.shutdown_checkbox.isChecked()))
+        action_layout.addWidget(self.shutdown_checkbox)
         
         clear_btn = QPushButton("Clear Completed")
         clear_btn.clicked.connect(self.clear_finished)
@@ -1381,6 +1387,59 @@ class MainWindow(QMainWindow):
             completed_count = sum(1 for t in self.tasks if t.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED))
             error_count = sum(1 for t in self.tasks if "Error" in str(t.status) or "Failed" in str(t.status))
             self.session_stats_widget.update_stats(self.session_downloaded_bytes, active_count, completed_count, error_count)
+
+        # Check Auto-Shutdown Trigger
+        if self.shutdown_checkbox.isChecked() and self.tasks and not getattr(self, 'shutdown_dialog_active', False):
+            has_active_or_queued = any(t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.IN_QUEUE, TaskStatus.UNPACKING) for t in self.tasks)
+            # Only trigger if downloads were started (or currently active/queued) and have now all finished
+            if hasattr(self, 'is_downloading') and self.is_downloading and not has_active_or_queued:
+                self.trigger_auto_shutdown()
+
+    def save_setting_key(self, key, value):
+        self.settings[key] = value
+        save_settings(self.settings)
+
+    def trigger_auto_shutdown(self):
+        self.shutdown_dialog_active = True
+        self.shutdown_checkbox.setChecked(False)
+        self.save_setting_key("auto_shutdown_on_completion", False)
+
+        countdown = 60
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setWindowTitle("Auto-Shutdown Triggered")
+        msg_box.setText(f"All downloads and extractions completed.\n\nSystem will shut down in {countdown} seconds.")
+        cancel_btn = msg_box.addButton("Cancel Shutdown", QMessageBox.ButtonRole.RejectRole)
+        
+        timer = QTimer(self)
+        
+        def update_timer():
+            nonlocal countdown
+            countdown -= 1
+            if countdown <= 0:
+                timer.stop()
+                msg_box.accept()
+                self.execute_system_shutdown()
+            else:
+                msg_box.setText(f"All downloads and extractions completed.\n\nSystem will shut down in {countdown} seconds.")
+
+        timer.timeout.connect(update_timer)
+        timer.start(1000)
+
+        msg_box.exec()
+        timer.stop()
+        self.shutdown_dialog_active = False
+
+    def execute_system_shutdown(self):
+        try:
+            if sys.platform == "win32":
+                os.system("shutdown /s /t 0")
+            elif sys.platform == "darwin":
+                os.system("sudo shutdown -h now")
+            else:
+                os.system("shutdown -h now")
+        except Exception as e:
+            logging.error(f"Failed to execute system shutdown: {e}")
 
     def download_manager(self):
         while True:

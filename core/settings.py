@@ -25,6 +25,7 @@ def load_settings():
         "max_workers": 3,
         "download_speed_limit": 0,
         "extract_after_download": False,
+        "auto_shutdown_on_completion": False,
         "column_widths": {},
         "skip_delete_confirmation": False,
         "show_warning_dialog": True,
