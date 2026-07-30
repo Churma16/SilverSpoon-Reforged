@@ -8,27 +8,31 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 
 ## Features
 
+### Fork-Exclusive Features & Improvements
+
 * **Auto Web Scraper:** Don't want to copy links manually? Paste a website URL (like a FitGirl repacks page) and SilverSpoon will automatically scan the raw HTML and extract all `fuckingfast.co` links for you!
 * **Global Rate Limiting & Throttling:** Features a powerful thread-safe token bucket rate limiter to cap your global download speeds without stalling active connections.
-* **Real-Time Speed Graph:** Includes a custom-painted `SpeedGraphWidget` rendering your historical network bandwidth curves with smooth gradients and peak tracking.
-* **System Tray & Notifications:** Keep SilverSpoon running in the background with a system tray icon and receive desktop notifications when your batches finish downloading or extracting.
+* **Real-Time Bandwidth Graph:** Includes a custom-painted `SpeedGraphWidget` rendering your historical network bandwidth curves with smooth gradients and peak tracking.
+* **Interactive Drag-and-Drop Reordering:** Reorder task items and batch folders interactively within the queue tree view.
+
+### Base Original Features
+
 * **Auto-Updater:** (Windows only) Automatically checks for, downloads, and applies new updates so you are always on the latest version without manual `.zip` downloads.
-* **Cross-Platform Extraction:** Built-in auto-extraction support for Windows (bundled `7z`), as well as Linux and macOS (via `/usr/bin/7z` / `p7zip`).
+* **Cross-Platform Auto-Extraction:** Built-in auto-extraction support for Windows (bundled `7z`), as well as Linux and macOS (via `/usr/bin/7z` / `p7zip`).
 * **Cloudflare Bypass:** Uses `cloudscraper` to mimic a real browser and bypass anti-bot challenges.
-* **Persistent Download History:** Automatically saves your task queue, progress, and folder groupings across sessions. Close the app anytime without losing your place!
+* **Persistent Session History:** Automatically saves your task queue, progress, and folder groupings across sessions. Close the app anytime without losing your place!
 * **Grouped Batch Folders:** Downloads are neatly organized into collapsible dropdown trees, showing aggregated progress, speed, and ETA for entire batches.
 * **Smart Folder Grouping & Batching:** Automatically suggests a unified folder name for a batch of links, perfectly grouping main game parts and messy optional files together.
 * **Persistent Settings:** Your preferences (save directory, concurrent workers, extraction options) are saved and remembered for your next session.
 * **Import Links & Clipboard:** Easily load bulk link lists from `.txt` files directly via the File menu, or use the "Paste from Clipboard" button for styled-free pasting.
-* **Live Speed & ETAs:** Features a real-time global download speed tracker and Calculates Estimated Time Remaining (ETA) for both individual files and total batch completions.
+* **Live Speed & ETAs:** Features a real-time global download speed tracker and calculates Estimated Time Remaining (ETA) for both individual files and total batch completions.
 * **Customizable UI & Shortcuts:** Interactive, resizable columns that save their state, plus right-click context menus and handy keyboard shortcuts (e.g., `Space` to pause/resume, `Delete` to remove tasks).
 * **File Management:** Safely delete tasks and optionally remove their associated physical files from your disk, or use "Force Redownload" to wipe and restart a corrupted file.
 * **Error Diagnostics:** Hover over failed tasks for detailed tooltips, and easily copy error logs for quick troubleshooting.
-* **Direct Link Extraction:** Automatically simulates the internal HTMX POST requests and scrapes raw HTML to fetch the real `.rar` direct links.
+* **Direct Link Scraper:** Automatically simulates internal HTMX POST requests and scrapes raw HTML to fetch real `.rar` direct links from `fuckingfast.co`.
 * **Multi-threading:** Downloads multiple parts concurrently (default 3 workers, customizable in Settings) to maximize bandwidth.
 * **Pause, Resume & Retry:** Safely pause your downloads, recover from network drops, or quickly retry errored links using HTTP `Range` headers.
-* **Graphical Interface:** Includes a clean, modern GUI built with PyQt6.
-* **Command Line Interface:** Also includes a lightweight CLI script for server environments or automation.
+* **PyQt6 GUI & Headless CLI:** Clean graphical UI built with PyQt6 along with a lightweight CLI script (`downloader.py`) for headless automation.
 
 ## Requirements
 
