@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.6.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.5.0...v1.6.0) (2026-07-30)
+
+### Features
+
+* **core:** add DownloadManager and ExtractionManager classes ([988ccb0](https://github.com/Churma16/SilverSpoon-Reforged/commit/988ccb0b35f846a2fd4cd8d415c8eaf802c411f8))
+* **core:** dynamically load version string from VERSION file and update repository target ([672c805](https://github.com/Churma16/SilverSpoon-Reforged/commit/672c805f2869a58938e49c5ddc2bd80f34db0090))
+* **ui:** add auto-shutdown on completion feature with 60s countdown timer ([b7121e8](https://github.com/Churma16/SilverSpoon-Reforged/commit/b7121e8e4f2335982f46142e020d9a095c81e205))
+* **ui:** add list marker sanitization, re-extraction action, and redownload confirmation dialog ([0e59dc5](https://github.com/Churma16/SilverSpoon-Reforged/commit/0e59dc5b32194ca8c6acdb29e0e2e5d70fb88f12))
+
+### Bug Fixes
+
+* **ui:** restore missing summary popup message box in force_redownload_selected ([9084e62](https://github.com/Churma16/SilverSpoon-Reforged/commit/9084e62a973d56cf470311c3bae0226cda7c4ce6))
 ## [1.5.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.4.2...v1.5.0) (2026-07-30)
 
 ### Features
