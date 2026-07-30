@@ -2,8 +2,29 @@ import os
 import sys
 import json
 
-CURRENT_VERSION = "v1.3.0"
-GITHUB_REPO = "billysams21/SilverSpoon"
+def _load_current_version():
+    possible_version_file_paths = []
+    if hasattr(sys, "_MEIPASS"):
+        possible_version_file_paths.append(os.path.join(sys._MEIPASS, "VERSION"))
+    if hasattr(sys, "frozen"):
+        possible_version_file_paths.append(os.path.join(os.path.dirname(sys.executable), "VERSION"))
+    
+    project_root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    possible_version_file_paths.append(os.path.join(project_root_directory, "VERSION"))
+    
+    for version_file_path in possible_version_file_paths:
+        if os.path.exists(version_file_path):
+            try:
+                with open(version_file_path, "r", encoding="utf-8") as version_file:
+                    version_string = version_file.read().strip()
+                    if version_string:
+                        return version_string if version_string.startswith("v") else f"v{version_string}"
+            except Exception:
+                pass
+    return "v1.5.0"
+
+CURRENT_VERSION = _load_current_version()
+GITHUB_REPO = "Churma16/SilverSpoon-Reforged"
 OLD_EXE_CLEANUP_MARKER_SUFFIX = ".delete_old_on_start"
 
 def get_settings_path():
