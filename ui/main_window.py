@@ -1086,6 +1086,13 @@ class MainWindow(QMainWindow):
             self.extracted_folders.discard(task.folder_name)
             redownloaded += 1
 
+        if skipped or failed or redownloaded == 0:
+            QMessageBox.information(
+                self,
+                "Force Redownload",
+                f"Queued: {redownloaded}\nSkipped active tasks: {skipped}\nFailed: {failed}"
+            )
+
     def reextract_selected(self):
         selected_tasks = self.get_selected_tasks()
         if not selected_tasks:
