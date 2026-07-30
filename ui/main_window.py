@@ -29,7 +29,7 @@ from core.download_task import DownloadTask
 from core.types import TaskStatus, BatchStatus
 from core.extractors.fuckingfast import FuckingFastExtractor
 from ui.dialogs import WarningDialog, SettingsDialog
-from ui.widgets import SpeedGraphWidget
+from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
 from utils.formatters import format_error_message
 
 class MainWindow(QMainWindow):
@@ -58,6 +58,8 @@ class MainWindow(QMainWindow):
         self.is_all_selected = False
         self.extracted_folders = set()
         self.notified_batches = set()
+        self.session_downloaded_bytes = 0
+        self.session_bytes_lock = threading.Lock()
         
         self.setup_system_tray()
         self.setup_ui()
@@ -266,10 +268,17 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(add_btn)
         
         # 3. Table/Tree Section
-        self.tree = QTreeWidget()
+        self.tree = ReorderableTreeWidget()
         self.tree.setColumnCount(7)
         self.tree.setHeaderLabels(["Filename / Folder", "Sel", "Status", "Progress", "Speed", "ETA", "Size"])
         
+        self.tree.setDragEnabled(True)
+        self.tree.setAcceptDrops(True)
+        self.tree.setDropIndicatorShown(True)
+        self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.tree.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.tree.order_changed.connect(self.sync_tasks_order_from_tree)
+
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.tree.setColumnWidth(1, 40)
@@ -367,6 +376,10 @@ class MainWindow(QMainWindow):
         
         main_layout.addLayout(action_layout)
 
+        # 5. Session Statistics Section
+        self.session_stats_widget = SessionStatsWidget(self)
+        main_layout.addWidget(self.session_stats_widget)
+
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             self.delete_selected()
@@ -432,11 +445,38 @@ class MainWindow(QMainWindow):
                 return item
                 
         batch_item = QTreeWidgetItem(self.tree)
-        batch_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        batch_item.setFlags(
+            Qt.ItemFlag.ItemIsDragEnabled |
+            Qt.ItemFlag.ItemIsDropEnabled |
+            Qt.ItemFlag.ItemIsUserCheckable |
+            Qt.ItemFlag.ItemIsEnabled |
+            Qt.ItemFlag.ItemIsSelectable
+        )
         batch_item.setText(0, folder_name)
         batch_item.setCheckState(1, Qt.CheckState.Unchecked)
         batch_item.setExpanded(True)
         return batch_item
+
+    def sync_tasks_order_from_tree(self):
+        reordered_task_list = []
+        for batch_index in range(self.tree.topLevelItemCount()):
+            top_level_batch_item = self.tree.topLevelItem(batch_index)
+            current_folder_name = top_level_batch_item.text(0)
+            
+            for child_index in range(top_level_batch_item.childCount()):
+                child_task_item = top_level_batch_item.child(child_index)
+                matching_task = next((task for task in self.tasks if task.tree_item == child_task_item), None)
+                if matching_task:
+                    if matching_task.folder_name != current_folder_name:
+                        matching_task.folder_name = current_folder_name
+                    reordered_task_list.append(matching_task)
+                    
+        for task in self.tasks:
+            if task not in reordered_task_list:
+                reordered_task_list.append(task)
+                
+        self.tasks = reordered_task_list
+        self.trigger_history_save()
 
     def trigger_history_save(self):
         if not hasattr(self, '_history_save_timer'):
@@ -450,7 +490,13 @@ class MainWindow(QMainWindow):
         batch_item = self.get_or_create_batch_item(task.folder_name)
         
         child_item = QTreeWidgetItem(batch_item)
-        child_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        child_item.setFlags(
+            Qt.ItemFlag.ItemIsDragEnabled |
+            Qt.ItemFlag.ItemIsDropEnabled |
+            Qt.ItemFlag.ItemIsUserCheckable |
+            Qt.ItemFlag.ItemIsEnabled |
+            Qt.ItemFlag.ItemIsSelectable
+        )
         
         child_item.setText(0, task.filename)
         
@@ -1264,6 +1310,13 @@ class MainWindow(QMainWindow):
                 self.notified_batches.add(folder_name + "_err")
                 self.send_notification("Batch Error", f"Batch '{folder_name}' has tasks with errors.", QSystemTrayIcon.MessageIcon.Warning)
 
+        # Update Session Statistics Panel
+        if hasattr(self, 'session_stats_widget'):
+            active_count = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.IN_QUEUE))
+            completed_count = sum(1 for t in self.tasks if t.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED))
+            error_count = sum(1 for t in self.tasks if "Error" in str(t.status) or "Failed" in str(t.status))
+            self.session_stats_widget.update_stats(self.session_downloaded_bytes, active_count, completed_count, error_count)
+
     def download_manager(self):
         while True:
             active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING))
@@ -1500,6 +1553,9 @@ class MainWindow(QMainWindow):
                             size = len(chunk)
                             task.downloaded_bytes += size
                             bytes_since_last += size
+                            
+                            with self.session_bytes_lock:
+                                self.session_downloaded_bytes += size
                             
                             now = time.time()
                             if now - last_time > 0.5:

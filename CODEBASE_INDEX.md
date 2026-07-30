@@ -27,7 +27,7 @@ It supports multi-threaded download management, automatic extraction via 7-Zip, 
 | [ui/](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/ui/) | User Interface Package | PyQt6 graphical components, dialogs, custom widgets, and window management. |
 | ├── [ui/main_window.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/ui/main_window.py) | Main Window Controller | `MainWindow` (`QMainWindow`) orchestrating task tree widgets, worker execution (`QThreadPool`), system tray icon (`QSystemTrayIcon`), desktop notifications, menu bars, and settings sync. |
 | ├── [ui/dialogs.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/ui/dialogs.py) | UI Dialogs | Settings dialog, batch folder naming prompt, error details popup, and log viewers. |
-| └── [ui/widgets.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/ui/widgets.py) | Custom Widgets | `SpeedGraphWidget` rendering real-time custom-painted bandwidth charts (`QPainter`). |
+| └── [ui/widgets.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/ui/widgets.py) | Custom Widgets | `SpeedGraphWidget` rendering bandwidth charts (`QPainter`), and `SessionStatsWidget` displaying live session metrics. |
 | [utils/](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/utils/) | Utilities Package | Shared helper functions and formatting routines. |
 | └── [utils/formatters.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/utils/formatters.py) | Data Formatters | Helpers for human-readable byte sizes, speed indicators, and ETA formatting. |
 | [build_exe.bat](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/build_exe.bat) | Build Script | PyInstaller script packaging application logic, icons, and 7-Zip binaries into a standalone executable. |
@@ -45,6 +45,8 @@ It supports multi-threaded download management, automatic extraction via 7-Zip, 
   - Controls multi-threaded downloads and extractions via `QThreadPool`.
 - **`SpeedGraphWidget`** (`QWidget` in `ui/widgets.py`):
   - Custom-painted bandwidth graph widget (`QPainter`) rendering historical network speed curves with smooth gradients and peak speed tracking.
+- **`SessionStatsWidget`** (`QFrame` in `ui/widgets.py`):
+  - Styled card widget rendering live session download totals, active task count, completed task count, and error count.
 - **`DownloadWorker`** (`QRunnable`, `QObject` in `ui/main_window.py`):
   - Asynchronous worker streaming bytes using `cloudscraper`.
   - Supports HTTP Range headers for resuming partial downloads and respects `GlobalRateLimiter`.
