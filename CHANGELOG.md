@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.7.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.6.0...v1.7.0) (2026-07-30)
+
+### Features
+
+* **updater:** add optional SHA-256 integrity verification step before extracting update archives ([3ec54a1](https://github.com/Churma16/SilverSpoon-Reforged/commit/3ec54a15cff130236332f635cb450c40ab4e7241))
+
+### Bug Fixes
+
+* **core:** safely decode raw binary response previews during 403/503 error logging ([e2653e8](https://github.com/Churma16/SilverSpoon-Reforged/commit/e2653e8ee76758f1299827a611c2b07d776b7f5b))
+* **core:** sanitize raw filenames and folder paths with os.path.basename to prevent directory traversal ([ca25cb4](https://github.com/Churma16/SilverSpoon-Reforged/commit/ca25cb4b326030ada6fffd9f7b648ab3f25515f7))
+* **extraction:** expand Windows 7-Zip executable lookup to include Program Files (x86) and PATH ([50a929b](https://github.com/Churma16/SilverSpoon-Reforged/commit/50a929b57020d08a03ec33d6d721424f6f3b919b))
+* **updater:** add Zip Slip path traversal guard and sanitize batch script paths ([7621924](https://github.com/Churma16/SilverSpoon-Reforged/commit/762192481a15abc203eda67f18523782cd775075))
 ## [1.6.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.5.0...v1.6.0) (2026-07-30)
 
 ### Features
