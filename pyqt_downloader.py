@@ -21,10 +21,13 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QTextEdit, QTreeWidget,
     QTreeWidgetItem, QHeaderView, QFileDialog, QAbstractItemView,
     QCheckBox, QDialog, QFormLayout, QSpinBox, QDialogButtonBox,
-    QMessageBox, QInputDialog, QSplashScreen, QMenu
+    QMessageBox, QInputDialog, QSplashScreen, QMenu, QSystemTrayIcon
 )
-from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
-from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent
+from PyQt6.QtGui import (
+    QAction, QDesktopServices, QIcon, QPixmap, QPainter,
+    QPainterPath, QColor, QLinearGradient, QPen
+)
+from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent, QPointF
 
 import cloudscraper
 from PyQt6.QtCore import QMetaObject, Q_ARG
@@ -33,6 +36,37 @@ from update_logic import UpdateCheckerThread, UpdateDownloaderDialog
 CURRENT_VERSION = "v1.3.0"
 GITHUB_REPO = "billysams21/SilverSpoon"
 OLD_EXE_CLEANUP_MARKER_SUFFIX = ".delete_old_on_start"
+
+class GlobalRateLimiter:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.tokens = 0.0
+        self.last_update = time.time()
+
+    def consume(self, chunk_bytes, limit_kb):
+        if limit_kb <= 0:
+            return
+            
+        limit_bytes = limit_kb * 1024.0
+        
+        while True:
+            with self.lock:
+                now = time.time()
+                elapsed = now - self.last_update
+                self.last_update = now
+                
+                self.tokens += elapsed * limit_bytes
+                if self.tokens > limit_bytes:
+                    self.tokens = limit_bytes
+                    
+                if self.tokens >= chunk_bytes:
+                    self.tokens -= chunk_bytes
+                    return
+                
+                needed = chunk_bytes - self.tokens
+                wait_time = needed / limit_bytes
+
+            time.sleep(max(wait_time, 0.005))
 
 def get_settings_path():
     return os.path.expanduser("~/.silverspoon_settings.json")
@@ -56,6 +90,8 @@ def load_settings():
         "column_widths": {},
         "skip_delete_confirmation": False,
         "show_warning_dialog": True,
+        "enable_notifications": True,
+        "minimize_to_tray": False,
         "last_update_check": 0.0
     }
     settings_path = get_settings_path()
@@ -188,7 +224,7 @@ class SettingsDialog(QDialog):
         self.speed_limit_spinbox.setRange(0, 999999)
         self.speed_limit_spinbox.setSuffix(" KB/s (0 = unlimited)")
         self.speed_limit_spinbox.setValue(self.current_settings.get("download_speed_limit", 0))
-        layout.addRow("Speed Limit (per download):", self.speed_limit_spinbox)
+        layout.addRow("Global Speed Limit (Total):", self.speed_limit_spinbox)
         
         # Extract Option
         self.extract_checkbox = QCheckBox()
@@ -200,6 +236,16 @@ class SettingsDialog(QDialog):
         self.skip_delete_checkbox.setChecked(self.current_settings.get("skip_delete_confirmation", False))
         layout.addRow("Skip delete confirmation:", self.skip_delete_checkbox)
         
+        # Desktop Notifications Option
+        self.notifications_checkbox = QCheckBox()
+        self.notifications_checkbox.setChecked(self.current_settings.get("enable_notifications", True))
+        layout.addRow("Enable Desktop Notifications:", self.notifications_checkbox)
+
+        # Minimize to System Tray Option
+        self.minimize_tray_checkbox = QCheckBox()
+        self.minimize_tray_checkbox.setChecked(self.current_settings.get("minimize_to_tray", False))
+        layout.addRow("Minimize to System Tray on Close:", self.minimize_tray_checkbox)
+
         # Buttons
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.reset_btn = button_box.addButton("Reset Defaults", QDialogButtonBox.ButtonRole.ResetRole)
@@ -230,6 +276,8 @@ class SettingsDialog(QDialog):
             self.speed_limit_spinbox.setValue(0)
             self.extract_checkbox.setChecked(False)
             self.skip_delete_checkbox.setChecked(False)
+            self.notifications_checkbox.setChecked(True)
+            self.minimize_tray_checkbox.setChecked(False)
             
             # Reset background invisible settings as well
             self.current_settings["column_widths"] = {}
@@ -242,6 +290,8 @@ class SettingsDialog(QDialog):
             "download_speed_limit": self.speed_limit_spinbox.value(),
             "extract_after_download": self.extract_checkbox.isChecked(),
             "skip_delete_confirmation": self.skip_delete_checkbox.isChecked(),
+            "enable_notifications": self.notifications_checkbox.isChecked(),
+            "minimize_to_tray": self.minimize_tray_checkbox.isChecked(),
             "column_widths": self.current_settings.get("column_widths", {}),
             "show_warning_dialog": self.current_settings.get("show_warning_dialog", True),
             "last_update_check": self.current_settings.get("last_update_check", 0.0)
@@ -355,7 +405,9 @@ class MainWindow(QMainWindow):
         self.scraper = cloudscraper.create_scraper(browser='chrome')
         self.is_all_selected = False
         self.extracted_folders = set()
+        self.notified_batches = set()
         
+        self.setup_system_tray()
         self.setup_ui()
         self.load_tasks_from_history()
         
@@ -379,7 +431,78 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.update_ui)
         self.timer.start(500) # update every 500ms
 
+    def setup_system_tray(self):
+        icon_path = os.path.join(self.base_dir, 'SilverSpoon.ico')
+        icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
+        
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(icon)
+        self.tray_icon.setToolTip("SilverSpoon Bulk Downloader")
+        
+        tray_menu = QMenu(self)
+        show_action = QAction("Show / Hide Window", self)
+        show_action.triggered.connect(self.toggle_visibility)
+        tray_menu.addAction(show_action)
+        
+        pause_action = QAction("Pause All Downloads", self)
+        pause_action.triggered.connect(self.pause_all)
+        tray_menu.addAction(pause_action)
+        
+        resume_action = QAction("Resume All Downloads", self)
+        resume_action.triggered.connect(self.resume_all)
+        tray_menu.addAction(resume_action)
+        
+        tray_menu.addSeparator()
+        
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.force_quit)
+        tray_menu.addAction(exit_action)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.on_tray_activated)
+        self.tray_icon.show()
+
+    def send_notification(self, title, message, icon_type=QSystemTrayIcon.MessageIcon.Information):
+        if self.settings.get("enable_notifications", True) and hasattr(self, 'tray_icon') and QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon.showMessage(title, message, icon_type, 3000)
+
+    def toggle_visibility(self):
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.activateWindow()
+
+    def on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.toggle_visibility()
+
+    def pause_all(self):
+        for task in self.tasks:
+            if task.status in ("Downloading", "Pending", "Starting..."):
+                task.pause_flag = True
+                task.status = "Paused"
+
+    def resume_all(self):
+        for task in self.tasks:
+            if task.status in ("Paused", "Queued", "Error", "Cancelled"):
+                task.status = "Pending"
+                task.pause_flag = False
+
+    def force_quit(self):
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.hide()
+        save_history(self.tasks)
+        save_settings(self.settings)
+        QApplication.quit()
+
     def closeEvent(self, event):
+        if self.settings.get("minimize_to_tray", False) and hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
+            self.hide()
+            self.send_notification("SilverSpoon", "SilverSpoon is running in the background system tray.")
+            event.ignore()
+            return
+
         # Save tasks history before closing
         save_history(self.tasks)
         
@@ -390,6 +513,9 @@ class MainWindow(QMainWindow):
         self.settings["column_widths"] = col_widths
         save_settings(self.settings)
         
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.hide()
+            
         event.accept()
 
     def setup_ui(self):
@@ -1475,6 +1601,15 @@ class MainWindow(QMainWindow):
             batch_item.setText(4, speed_str)
             batch_item.setText(5, eta_str)
             batch_item.setText(6, size_str)
+
+            # Trigger notification when a batch status changes to Completed, Extracted, or Contains Errors
+            folder_name = batch_item.text(0)
+            if batch_status in ("Completed", "Extracted") and folder_name not in self.notified_batches:
+                self.notified_batches.add(folder_name)
+                self.send_notification("Batch Finished", f"Batch '{folder_name}' is {batch_status.lower()}!")
+            elif batch_status == "Contains Errors" and (folder_name + "_err") not in self.notified_batches:
+                self.notified_batches.add(folder_name + "_err")
+                self.send_notification("Batch Error", f"Batch '{folder_name}' has tasks with errors.", QSystemTrayIcon.MessageIcon.Warning)
 
     def download_manager(self):
         while True:
