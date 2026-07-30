@@ -80,9 +80,20 @@ If you prefer the command line:
    ```
 *(Files will be downloaded to the current working directory).*
 
+## Project Structure
+
+* `core/` - Core download management, thread-safe rate limiting, session history, and auto-extraction logic.
+  * `core/extractors/` - Provider-specific link scrapers (e.g., FuckingFast).
+* `ui/` - PyQt6 user interface components, main window, dialogs, and custom widgets (e.g., speed graph).
+* `utils/` - Helper functions for byte size formatting, unit conversions, and text utilities.
+* `assets/` - Documentation screenshots and icon resources.
+* `.github/` - GitHub Actions workflows for automated versioning and release publishing.
+
+
 ## Contributing
 
 We welcome contributions! If you'd like to help improve SilverSpoon, please see our [Contributing Guide](CONTRIBUTING.md) for instructions on how to set up your environment, follow our branching strategy (`dev` branch), and submit Pull Requests.
+
 
 ## Changelog
 
