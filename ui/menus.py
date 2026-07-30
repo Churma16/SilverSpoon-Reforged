@@ -23,35 +23,43 @@ def setup_menu_bar(window):
     # Help Menu
     help_menu = menu_bar.addMenu("&Help")
     
-    github_action = QAction("&GitHub Repository", window)
-    github_action.triggered.connect(window.open_github_link)
-    help_menu.addAction(github_action)
+    # 1. Getting Started & Setup
+    welcome_action = QAction("&Welcome & Setup Guide", window)
+    welcome_action.triggered.connect(window.show_warning_dialog_manual)
+    help_menu.addAction(welcome_action)
     
-    contact_action = QAction("&Contact Us", window)
-    contact_action.triggered.connect(window.open_contact_link)
-    help_menu.addAction(contact_action)
+    help_menu.addSeparator()
     
-    contributing_action = QAction("C&ontributing Guide", window)
-    contributing_action.triggered.connect(window.show_contributing_dialog)
-    help_menu.addAction(contributing_action)
+    # 2. Versioning & Updates
+    check_update_action = QAction("Check for &Updates...", window)
+    check_update_action.triggered.connect(window.manual_update_check)
+    help_menu.addAction(check_update_action)
     
-    changelog_action = QAction("View &Changelog", window)
+    changelog_action = QAction("Release &Notes & Changelog", window)
     changelog_action.triggered.connect(window.show_changelog_dialog)
     help_menu.addAction(changelog_action)
     
     help_menu.addSeparator()
     
-    welcome_action = QAction("&Welcome", window)
-    welcome_action.triggered.connect(window.show_warning_dialog_manual)
-    help_menu.addAction(welcome_action)
+    # 3. Repository & Community
+    github_action = QAction("&Visit GitHub Repository", window)
+    github_action.triggered.connect(window.open_github_link)
+    help_menu.addAction(github_action)
     
-    check_update_action = QAction("Check for &Updates...", window)
-    check_update_action.triggered.connect(window.manual_update_check)
-    help_menu.addAction(check_update_action)
-
-    # About Menu
-    about_menu = menu_bar.addMenu("&About")
+    contributing_action = QAction("How to &Contribute", window)
+    contributing_action.triggered.connect(window.show_contributing_dialog)
+    help_menu.addAction(contributing_action)
     
+    contact_action = QAction("Report &Issue & Support", window)
+    contact_action.triggered.connect(window.open_contact_link)
+    help_menu.addAction(contact_action)
+    
+    help_menu.addSeparator()
+    
+    # 4. Product Info
     about_action = QAction("&About SilverSpoon Reforged", window)
     about_action.triggered.connect(window.show_about_dialog)
-    about_menu.addAction(about_action)
+    help_menu.addAction(about_action)
+
+
+
