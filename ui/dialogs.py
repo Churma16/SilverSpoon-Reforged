@@ -3,9 +3,38 @@ import sys
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QFormLayout, QSpinBox, QDialogButtonBox,
-    QFileDialog, QMessageBox
+    QFileDialog, QMessageBox, QTextEdit
 )
 from PyQt6.QtCore import Qt
+
+class ChangelogDialog(QDialog):
+    def __init__(self, base_dir, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Changelog - SilverSpoon")
+        self.resize(650, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        changelog_path = os.path.join(base_dir, "CHANGELOG.md")
+        content = ""
+        if os.path.exists(changelog_path):
+            try:
+                with open(changelog_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception as e:
+                content = f"Failed to load CHANGELOG.md:\n{e}"
+        else:
+            content = "CHANGELOG.md file not found."
+            
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setMarkdown(content)
+        layout.addWidget(text_edit)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
 
 class WarningDialog(QDialog):
     def __init__(self, settings, parent=None):
