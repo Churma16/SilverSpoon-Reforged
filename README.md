@@ -12,8 +12,12 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 
 * **Auto Web Scraper:** Don't want to copy links manually? Paste a website URL (like a FitGirl repacks page) and SilverSpoon will automatically scan the raw HTML and extract all `fuckingfast.co` links for you!
 * **Global Rate Limiting & Throttling:** Features a powerful thread-safe token bucket rate limiter to cap your global download speeds without stalling active connections.
-* **Real-Time Bandwidth Graph:** Includes a custom-painted `SpeedGraphWidget` rendering your historical network bandwidth curves with smooth gradients and peak tracking.
-* **Interactive Drag-and-Drop Reordering:** Reorder task items and batch folders interactively within the queue tree view.
+* **Real-Time Bandwidth Graph:** Includes a custom-painted `SpeedGraphWidget` rendering historical network bandwidth curves with smooth gradients and peak tracking.
+* **Session Metrics & Stats Bar:** Live `SessionStatsWidget` tracking total downloaded bytes, active downloads, completed tasks, and error counts.
+* **Interactive Drag-and-Drop Reordering:** Custom `ReorderableTreeWidget` allowing interactive drag-and-drop reordering of tasks and batch folders.
+* **System Tray & Desktop Notifications:** Keep SilverSpoon running in the background with system tray integration and desktop notifications when downloads or extractions complete.
+* **In-App Changelog Viewer:** Built-in markdown viewer dialog (`ChangelogDialog`) to inspect release release notes directly from the GUI.
+* **Auto-Shutdown on Completion:** Option to automatically shut down or put the computer to sleep when all queue downloads finish.
 
 ### Base Original Features
 
