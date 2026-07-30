@@ -8,6 +8,10 @@ import urllib.request
 import tempfile
 import threading
 import re
+import zipfile
+import shutil
+import subprocess
+
 
 _VERSION_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(.*)$", re.IGNORECASE)
 
@@ -173,4 +177,65 @@ class UpdateDownloaderDialog(QDialog):
                 except: pass
         finally:
             self.finished = True
+
+def extract_and_verify_update(zip_path):
+    extract_dir = os.path.join(tempfile.gettempdir(), f"silverspoon_extract_{int(time.time())}")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_dir)
+        
+    new_exe_path = None
+    for root, _, files in os.walk(extract_dir):
+        for file in files:
+            if file.lower() == "silverspoon.exe":
+                new_exe_path = os.path.join(root, file)
+                break
+                
+    if not new_exe_path:
+        raise Exception("Could not find SilverSpoon.exe inside the downloaded zip.")
+    return extract_dir, new_exe_path
+
+def perform_exe_replacement(new_exe_path, current_exe, old_exe_path):
+    if os.path.exists(old_exe_path):
+        try:
+            os.remove(old_exe_path)
+        except Exception:
+            pass
+    
+    os.rename(current_exe, old_exe_path)
+    
+    copy_success = False
+    for _ in range(10):
+        try:
+            shutil.copy2(new_exe_path, current_exe)
+            copy_success = True
+            break
+        except PermissionError:
+            time.sleep(0.5)
+            
+    if not copy_success:
+        os.rename(old_exe_path, current_exe)
+        raise Exception("Could not copy the new executable. It might be locked by your Antivirus.")
+
+def launch_restart_script(current_exe, old_exe_path, cleanup_marker):
+    bat_path = os.path.join(tempfile.gettempdir(), f"silverspoon_restart_{int(time.time())}.bat")
+    with open(bat_path, 'w') as bat:
+        bat.write('@echo off\n')
+        bat.write('set PYINSTALLER_RESET_ENVIRONMENT=1\n')
+        bat.write('set _MEIPASS=\n')
+        bat.write('set _MEIPASS2=\n')
+        bat.write('ping 127.0.0.1 -n 4 > nul\n')
+        bat.write(f'start "" /wait "{current_exe}"\n')
+        bat.write('if errorlevel 1 goto cleanup\n')
+        bat.write(f'if exist "{cleanup_marker}" del /f /q "{old_exe_path}" > nul 2>&1\n')
+        bat.write(f'if not exist "{old_exe_path}" if exist "{cleanup_marker}" del /q "{cleanup_marker}" > nul 2>&1\n')
+        bat.write(':cleanup\n')
+        bat.write(f'del "%~f0"\n')
+    
+    CREATE_NO_WINDOW = 0x08000000
+    subprocess.Popen(
+        [bat_path],
+        creationflags=CREATE_NO_WINDOW,
+        close_fds=True
+    )
+
 
