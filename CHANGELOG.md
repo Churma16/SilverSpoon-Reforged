@@ -1,5 +1,35 @@
 # Changelog
 
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+
+## 1.4.0 (2026-07-30)
+
+
+### Features
+
+* add Linux/macOS extraction support ([af49e29](https://github.com/Churma16/SilverSpoon-Reforged/commit/af49e29d6d510ad96e0b21a17356268604bfa1a3))
+* add status codes ([1de8f90](https://github.com/Churma16/SilverSpoon-Reforged/commit/1de8f902fca7fbf419d5134ef8f2fb134aa27336))
+* **core:** add TaskStatus enum and type definitions ([49ce690](https://github.com/Churma16/SilverSpoon-Reforged/commit/49ce690640b97eb95790f78b5c8a12e6db3f73c4))
+* **downloader:** add download speed limit setting and throttling mechanism ([98456d2](https://github.com/Churma16/SilverSpoon-Reforged/commit/98456d2cd439c3f5fa6b41b01fbecb804bf9a68f))
+* **downloader:** add web page scraping and raw HTML parsing for links ([ac25a2f](https://github.com/Churma16/SilverSpoon-Reforged/commit/ac25a2fd93310cd014fa7c1f6d214193304cea3d))
+* **downloader:** implement thread-safe global token bucket rate limiter ([efecee0](https://github.com/Churma16/SilverSpoon-Reforged/commit/efecee0c0d55cedd46709caf54c9b0bf3c5f0fda))
+* **downloader:** integrate global rate limiter into GUI download workers ([66486aa](https://github.com/Churma16/SilverSpoon-Reforged/commit/66486aafc8420dfb00ba5c2f204508c95bc5ae91))
+* force redownload, context menu, copy log, error hover, keyboard shortcuts ([da43f6c](https://github.com/Churma16/SilverSpoon-Reforged/commit/da43f6c2fe16770392b05555b769bdfa87899893))
+* implement auto-updater for Windows executable ([87a584b](https://github.com/Churma16/SilverSpoon-Reforged/commit/87a584b6dd4822fb4cc1aa1ba20a0678a85b344e))
+* linux extraction support using p7zip ([d44b68e](https://github.com/Churma16/SilverSpoon-Reforged/commit/d44b68eecd7b98cdaeb58f10df286efe94733784))
+* **ui:** add real-time download speed graph widget ([a5f25c8](https://github.com/Churma16/SilverSpoon-Reforged/commit/a5f25c8a3b2bd7921e584743feefb2fc78415d30))
+* **ui:** add system tray integration and desktop notifications ([7710980](https://github.com/Churma16/SilverSpoon-Reforged/commit/7710980fe506c8ed3fe1be311c0a6d50ab929dab))
+* **ui:** add total queue ETA calculation and estimated batch size calculation ([fcbdaf1](https://github.com/Churma16/SilverSpoon-Reforged/commit/fcbdaf1efeafe9b59aab8e49f5e189929dd9f8fa))
+* welcome/warning dialogue, path fixes, reset settings button ([1bbb2e6](https://github.com/Churma16/SilverSpoon-Reforged/commit/1bbb2e69c7db6d07a39fce6e9d756da01b911892))
+
+
+### Bug Fixes
+
+* code cleaning ([8a701d3](https://github.com/Churma16/SilverSpoon-Reforged/commit/8a701d3b8b73596b059ada9b55c1b711223f1d5e))
+* **downloader:** dynamically evaluate speed limit settings during chunk iterations ([6ecb83d](https://github.com/Churma16/SilverSpoon-Reforged/commit/6ecb83d5a4931317e5e73c932c8c0ef258fbc5f9))
+
+# Changelog
+
 All notable changes to this project will be documented in this file.
 
 ## [v1.3.0] - 2026-07-17
