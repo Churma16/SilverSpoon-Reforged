@@ -6,12 +6,44 @@ import time
 import sys
 import os
 
+class GlobalRateLimiter:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.tokens = 0.0
+        self.last_update = time.time()
+
+    def consume(self, chunk_bytes, limit_kb):
+        if limit_kb <= 0:
+            return
+            
+        limit_bytes = limit_kb * 1024.0
+        
+        while True:
+            with self.lock:
+                now = time.time()
+                elapsed = now - self.last_update
+                self.last_update = now
+                
+                self.tokens += elapsed * limit_bytes
+                if self.tokens > limit_bytes:
+                    self.tokens = limit_bytes
+                    
+                if self.tokens >= chunk_bytes:
+                    self.tokens -= chunk_bytes
+                    return
+                
+                needed = chunk_bytes - self.tokens
+                wait_time = needed / limit_bytes
+
+            time.sleep(max(wait_time, 0.005))
+
 class DownloadManager:
     def __init__(self, links_file, max_workers=3, chunk_size=8192*8, speed_limit_kb=0):
         self.links_file = links_file
         self.max_workers = max_workers
         self.chunk_size = chunk_size
         self.speed_limit_kb = speed_limit_kb
+        self.rate_limiter = GlobalRateLimiter()
         self.scraper = cloudscraper.create_scraper(browser='chrome')
         self.total_links = 0
         self.completed_links = 0
@@ -120,11 +152,7 @@ class DownloadManager:
                                     sys.stdout.flush()
                                 last_print = now
                                 
-                            if speed_limit_b > 0:
-                                expected_time = size / speed_limit_b
-                                elapsed_time = time.time() - chunk_start_time
-                                if elapsed_time < expected_time:
-                                    time.sleep(expected_time - elapsed_time)
+                            self.rate_limiter.consume(size, self.speed_limit_kb)
                                 
                 with self.lock:
                     sys.stdout.write(f"\r[{filename}] 100% | Downloaded successfully{' ' * 30}\n")
