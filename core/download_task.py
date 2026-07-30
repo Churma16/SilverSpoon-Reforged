@@ -7,11 +7,14 @@ class DownloadTask:
         self.link = link.strip()
         self.base_save_dir = base_save_dir
         
-        self.file_id = self.link.split('/')[-1].split('#')[0]
-        self.filename = self.link.split('#')[-1] if '#' in self.link else self.file_id
+        raw_file_id = self.link.split('/')[-1].split('#')[0]
+        raw_filename = self.link.split('#')[-1] if '#' in self.link else raw_file_id
+        
+        self.file_id = os.path.basename(raw_file_id)
+        self.filename = os.path.basename(raw_filename)
         
         if folder_name:
-            self.folder_name = folder_name
+            self.folder_name = os.path.basename(folder_name)
         else:
             # Fallback calculate smart directory grouping based on prefix
             match = re.search(r'(.*?)(\.part\d+\.rar|\.rar)$', self.filename, re.IGNORECASE)
@@ -19,6 +22,7 @@ class DownloadTask:
                 self.folder_name = match.group(1).strip('._-')
             else:
                 self.folder_name = self.filename.rsplit('.', 1)[0]
+            self.folder_name = os.path.basename(self.folder_name)
             
         self.save_dir = os.path.normpath(os.path.join(self.base_save_dir, self.folder_name))
         self.filepath = os.path.normpath(os.path.join(self.save_dir, self.filename))

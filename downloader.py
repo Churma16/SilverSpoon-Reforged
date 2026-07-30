@@ -32,7 +32,8 @@ class DownloadManager:
         return dl_url
 
     def download_file(self, link):
-        filename = link.split('#')[-1] if '#' in link else link.split('/')[-1]
+        raw_filename = link.split('#')[-1] if '#' in link else link.split('/')[-1]
+        filename = os.path.basename(raw_filename)
         
         dl_url = self.extract_direct_url(link)
         if not dl_url:
