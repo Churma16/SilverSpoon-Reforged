@@ -70,18 +70,24 @@ class ExtractionManager:
                 
             cmd = None
             if sys.platform == 'win32':
+                installed_7z = r"C:\Program Files\7-Zip\7z.exe"
+                installed_7z_x86 = r"C:\Program Files (x86)\7-Zip\7z.exe"
+                installed_winrar = r"C:\Program Files\WinRAR\WinRAR.exe"
+                
+                bundled_7z = None
                 if hasattr(sys, '_MEIPASS'):
                     bundled_7z = os.path.join(sys._MEIPASS, '7z.exe')
-                else:
-                    bundled_7z = os.path.normpath(os.path.join(self.base_dir, '7z.exe'))
-                installed_7z = r"C:\Program Files\7-Zip\7z.exe"
-                installed_winrar = r"C:\Program Files\WinRAR\WinRAR.exe"
+                
                 if os.path.exists(installed_7z):
                     cmd = [installed_7z, 'x', first_vol, f'-o{save_dir}', '-y']
+                elif os.path.exists(installed_7z_x86):
+                    cmd = [installed_7z_x86, 'x', first_vol, f'-o{save_dir}', '-y']
                 elif os.path.exists(installed_winrar):
                     cmd = [installed_winrar, 'x', '-y', first_vol, f'{save_dir}\\']
-                elif os.path.exists(bundled_7z):
+                elif bundled_7z and os.path.exists(bundled_7z):
                     cmd = [bundled_7z, 'x', first_vol, f'-o{save_dir}', '-y']
+                elif shutil.which('7z'):
+                    cmd = [shutil.which('7z'), 'x', first_vol, f'-o{save_dir}', '-y']
             else:
                 if shutil.which('7z'):
                     cmd = ['7z', 'x', first_vol, f'-o{save_dir}', '-y']
