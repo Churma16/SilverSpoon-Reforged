@@ -1,41 +1,12 @@
 import cloudscraper
 import concurrent.futures
-import queue
 import threading
 import time
 import sys
 import os
 
-class GlobalRateLimiter:
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.tokens = 0.0
-        self.last_update = time.time()
-
-    def consume(self, chunk_bytes, limit_kb):
-        if limit_kb <= 0:
-            return
-            
-        limit_bytes = limit_kb * 1024.0
-        
-        while True:
-            with self.lock:
-                now = time.time()
-                elapsed = now - self.last_update
-                self.last_update = now
-                
-                self.tokens += elapsed * limit_bytes
-                if self.tokens > limit_bytes:
-                    self.tokens = limit_bytes
-                    
-                if self.tokens >= chunk_bytes:
-                    self.tokens -= chunk_bytes
-                    return
-                
-                needed = chunk_bytes - self.tokens
-                wait_time = needed / limit_bytes
-
-            time.sleep(max(wait_time, 0.005))
+from core.rate_limiter import GlobalRateLimiter
+from core.extractors.fuckingfast import FuckingFastExtractor
 
 class DownloadManager:
     def __init__(self, links_file, max_workers=3, chunk_size=8192*8, speed_limit_kb=0):
@@ -45,6 +16,7 @@ class DownloadManager:
         self.speed_limit_kb = speed_limit_kb
         self.rate_limiter = GlobalRateLimiter()
         self.scraper = cloudscraper.create_scraper(browser='chrome')
+        self.extractor = FuckingFastExtractor(self.scraper)
         self.total_links = 0
         self.completed_links = 0
         self.failed_links = []
@@ -56,33 +28,11 @@ class DownloadManager:
         self.total_links = len(self.links)
 
     def extract_direct_url(self, link):
-        file_id = link.split('/')[-1].split('#')[0]
-        try:
-            res = self.scraper.get(link)
-            if res.status_code != 200:
-                return None
-                
-            post_url = f"https://fuckingfast.co/f/{file_id}/go"
-            headers = {
-                'HX-Request': 'true',
-                'HX-Target': '',
-                'HX-Current-URL': link,
-                'Referer': link
-            }
-            
-            res2 = self.scraper.post(post_url, headers=headers)
-            if res2.status_code != 200:
-                return None
-                
-            dl_url = res2.headers.get('Hx-Redirect')
-            return dl_url
-        except Exception as e:
-            # print(f"Error extracting {file_id}: {e}")
-            return None
+        dl_url, _ = self.extractor.extract_direct_url(link)
+        return dl_url
 
     def download_file(self, link):
         filename = link.split('#')[-1] if '#' in link else link.split('/')[-1]
-        file_id = link.split('/')[-1].split('#')[0]
         
         dl_url = self.extract_direct_url(link)
         if not dl_url:
@@ -92,7 +42,6 @@ class DownloadManager:
             return False
 
         try:
-            # check if file exists and get its size
             resume_header = {}
             mode = 'wb'
             initial_size = 0
@@ -100,7 +49,6 @@ class DownloadManager:
             if os.path.exists(filename):
                 initial_size = os.path.getsize(filename)
                 
-            # fetch headers to see total size and if it supports range
             head_req = self.scraper.head(dl_url)
             total_size = int(head_req.headers.get('content-length', 0))
             
@@ -114,8 +62,6 @@ class DownloadManager:
                 resume_header = {'Range': f'bytes={initial_size}-'}
                 mode = 'ab'
 
-            speed_limit_b = self.speed_limit_kb * 1024
-
             with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
                 if r.status_code not in (200, 206):
                     with self.lock:
@@ -124,7 +70,6 @@ class DownloadManager:
                     return False
                 
                 if r.status_code == 200 and initial_size > 0:
-                    # server ignores range header
                     mode = 'wb'
                     initial_size = 0
                 
@@ -137,14 +82,13 @@ class DownloadManager:
                 
                 with open(filename, mode) as f:
                     for chunk in r.iter_content(chunk_size=self.chunk_size):
-                        chunk_start_time = time.time()
                         if chunk:
                             f.write(chunk)
                             size = len(chunk)
                             dl += size
                             
                             now = time.time()
-                            if now - last_print > 1: # update progress every 1s
+                            if now - last_print > 1:
                                 speed = (size) / (now - last_print + 0.0001) / (1024*1024) if last_print > 0 else 0
                                 percent = (dl / total_size) * 100 if total_size > 0 else 0
                                 with self.lock:
@@ -169,7 +113,6 @@ class DownloadManager:
     def run(self):
         print(f"Starting download of {self.total_links} files with {self.max_workers} concurrent workers...")
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # We use a set for tracking completed futures to keep main thread alive
             futures = [executor.submit(self.download_file, link) for link in self.links]
             concurrent.futures.wait(futures)
             
