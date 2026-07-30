@@ -179,12 +179,18 @@ class UpdateDownloaderDialog(QDialog):
             self.finished = True
 
 def extract_and_verify_update(zip_path):
-    extract_dir = os.path.join(tempfile.gettempdir(), f"silverspoon_extract_{int(time.time())}")
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_dir)
+    target_extract_directory = os.path.join(tempfile.gettempdir(), f"silverspoon_extract_{int(time.time())}")
+    resolved_target_directory = os.path.abspath(target_extract_directory)
+    
+    with zipfile.ZipFile(zip_path, 'r') as zip_archive:
+        for archive_member in zip_archive.infolist():
+            destination_path = os.path.abspath(os.path.join(target_extract_directory, archive_member.filename))
+            if os.path.commonpath([resolved_target_directory, destination_path]) != resolved_target_directory:
+                raise Exception(f"Path traversal security violation detected in archive entry: {archive_member.filename}")
+            zip_archive.extract(archive_member, target_extract_directory)
         
     new_exe_path = None
-    for root, _, files in os.walk(extract_dir):
+    for root, _, files in os.walk(target_extract_directory):
         for file in files:
             if file.lower() == "silverspoon.exe":
                 new_exe_path = os.path.join(root, file)
@@ -192,7 +198,8 @@ def extract_and_verify_update(zip_path):
                 
     if not new_exe_path:
         raise Exception("Could not find SilverSpoon.exe inside the downloaded zip.")
-    return extract_dir, new_exe_path
+    return target_extract_directory, new_exe_path
+
 
 def perform_exe_replacement(new_exe_path, current_exe, old_exe_path):
     if os.path.exists(old_exe_path):
@@ -216,7 +223,15 @@ def perform_exe_replacement(new_exe_path, current_exe, old_exe_path):
         os.rename(old_exe_path, current_exe)
         raise Exception("Could not copy the new executable. It might be locked by your Antivirus.")
 
+def _escape_batch_path(file_path_string):
+    abs_path = os.path.abspath(file_path_string)
+    return abs_path.replace('%', '%%').replace('"', '""')
+
 def launch_restart_script(current_exe, old_exe_path, cleanup_marker):
+    sanitized_current_exe = _escape_batch_path(current_exe)
+    sanitized_old_exe_path = _escape_batch_path(old_exe_path)
+    sanitized_cleanup_marker = _escape_batch_path(cleanup_marker)
+
     bat_path = os.path.join(tempfile.gettempdir(), f"silverspoon_restart_{int(time.time())}.bat")
     with open(bat_path, 'w') as bat:
         bat.write('@echo off\n')
@@ -224,12 +239,12 @@ def launch_restart_script(current_exe, old_exe_path, cleanup_marker):
         bat.write('set _MEIPASS=\n')
         bat.write('set _MEIPASS2=\n')
         bat.write('ping 127.0.0.1 -n 4 > nul\n')
-        bat.write(f'start "" /wait "{current_exe}"\n')
+        bat.write(f'start "" /wait "{sanitized_current_exe}"\n')
         bat.write('if errorlevel 1 goto cleanup\n')
-        bat.write(f'if exist "{cleanup_marker}" del /f /q "{old_exe_path}" > nul 2>&1\n')
-        bat.write(f'if not exist "{old_exe_path}" if exist "{cleanup_marker}" del /q "{cleanup_marker}" > nul 2>&1\n')
+        bat.write(f'if exist "{sanitized_cleanup_marker}" del /f /q "{sanitized_old_exe_path}" > nul 2>&1\n')
+        bat.write(f'if not exist "{sanitized_old_exe_path}" if exist "{sanitized_cleanup_marker}" del /q "{sanitized_cleanup_marker}" > nul 2>&1\n')
         bat.write(':cleanup\n')
-        bat.write(f'del "%~f0"\n')
+        bat.write('del "%~f0"\n')
     
     CREATE_NO_WINDOW = 0x08000000
     subprocess.Popen(
