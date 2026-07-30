@@ -34,8 +34,12 @@ jobs:
         run: |
           Compress-Archive -Path "dist/SilverSpoon.exe" -DestinationPath "SilverSpoon-Reforged-${{ github.ref_name }}.zip"
 
+      - name: Extract Release Notes
+        id: extract_notes
+        uses: ffurrer2/extract-release-notes@v2
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: SilverSpoon-Reforged-${{ github.ref_name }}.zip
-          generate_release_notes: true
+          body: ${{ steps.extract_notes.outputs.release_notes }}
