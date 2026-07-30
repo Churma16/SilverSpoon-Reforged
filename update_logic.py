@@ -11,6 +11,7 @@ import re
 import zipfile
 import shutil
 import subprocess
+import hashlib
 
 
 _VERSION_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(.*)$", re.IGNORECASE)
@@ -178,7 +179,16 @@ class UpdateDownloaderDialog(QDialog):
         finally:
             self.finished = True
 
-def extract_and_verify_update(zip_path):
+def extract_and_verify_update(zip_path, expected_sha256_hash=None):
+    if expected_sha256_hash:
+        hasher = hashlib.sha256()
+        with open(zip_path, 'rb') as file_stream:
+            while chunk := file_stream.read(65536):
+                hasher.update(chunk)
+        calculated_sha256_hash = hasher.hexdigest().lower()
+        if calculated_sha256_hash != expected_sha256_hash.strip().lower():
+            raise Exception(f"Archive hash mismatch. Expected {expected_sha256_hash}, got {calculated_sha256_hash}.")
+
     target_extract_directory = os.path.join(tempfile.gettempdir(), f"silverspoon_extract_{int(time.time())}")
     resolved_target_directory = os.path.abspath(target_extract_directory)
     
