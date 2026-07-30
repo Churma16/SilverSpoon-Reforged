@@ -1702,9 +1702,6 @@ class MainWindow(QMainWindow):
                 last_time = start_time
                 bytes_since_last = 0
                 
-                speed_limit_kb = self.settings.get("download_speed_limit", 0)
-                speed_limit_b = speed_limit_kb * 1024
-                
                 with open(task.filepath, mode) as f:
                     for chunk in r.iter_content(chunk_size=8192*8):
                         chunk_start_time = time.time()
@@ -1731,7 +1728,10 @@ class MainWindow(QMainWindow):
                                 last_time = now
                                 bytes_since_last = 0
                                 
-                            if speed_limit_b > 0:
+                            # Dynamically fetch current speed limit setting so changes apply instantly
+                            speed_limit_kb = self.settings.get("download_speed_limit", 0)
+                            if speed_limit_kb > 0:
+                                speed_limit_b = speed_limit_kb * 1024
                                 expected_time = size / speed_limit_b
                                 elapsed_time = time.time() - chunk_start_time
                                 if elapsed_time < expected_time:
