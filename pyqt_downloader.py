@@ -461,7 +461,7 @@ class MainWindow(QMainWindow):
         
         # 2. Links & Global Stats Section
         stats_layout = QHBoxLayout()
-        stats_layout.addWidget(QLabel("Paste Links Here (one per line):"))
+        stats_layout.addWidget(QLabel("Paste Links or HTML Block Here:"))
         
         paste_btn = QPushButton("Paste from Clipboard")
         paste_btn.clicked.connect(self.paste_from_clipboard)
@@ -1048,15 +1048,37 @@ class MainWindow(QMainWindow):
         if not text:
             return
             
-        links = [line.strip() for line in text.split('\n') if line.strip() and line.startswith('http')]
-        if not links:
+        # Extract URLs directly or from HTML tags (href=...)
+        extracted_urls = re.findall(r'https?://[^\s"<>\']+', text)
+        
+        # Check if the input is a web page URL (e.g., fitgirl-repacks.site page) rather than direct host links
+        ff_links = [u.rstrip('"\';>,') for u in extracted_urls if "fuckingfast.co" in u]
+        web_urls = [u.rstrip('"\';>,') for u in extracted_urls if "fuckingfast.co" not in u]
+        
+        if not ff_links and web_urls:
+            # User pasted a website page URL! Scrape the web page automatically.
+            target_url = web_urls[0]
+            try:
+                scraper = cloudscraper.create_scraper(browser='chrome')
+                res = scraper.get(target_url, timeout=15)
+                if res.status_code == 200:
+                    page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
+                    ff_links = list(dict.fromkeys([u.rstrip('"\';>,') for u in page_ff_urls]))
+            except Exception as e:
+                QMessageBox.critical(self, "Scraper Error", f"Failed to scrape webpage links:\n{e}")
+                return
+
+        cleaned_links = list(dict.fromkeys(ff_links))
+                
+        if not cleaned_links:
+            QMessageBox.warning(self, "No Valid Links", "No fuckingfast.co links were found directly or on the specified web page.")
             return
             
         save_dir = os.path.abspath(self.dir_input.text())
         
         # Try to guess a folder name from the first link
         suggested_folder = ""
-        first_link = links[0]
+        first_link = cleaned_links[0]
         first_filename = first_link.split('#')[-1] if '#' in first_link else first_link.split('/')[-1].split('#')[0]
         match = re.search(r'(.*?)(\.part\d+\.rar|\.rar)$', first_filename, re.IGNORECASE)
         if match:
@@ -1078,7 +1100,7 @@ class MainWindow(QMainWindow):
             
         folder_name = folder_name.strip()
         
-        for link in links:
+        for link in cleaned_links:
             task = DownloadTask(link, save_dir, folder_name)
             self.add_task_to_ui(task)
             
