@@ -1575,7 +1575,29 @@ class MainWindow(QMainWindow):
             return f"{s}s"
 
     def update_ui(self):
-        global_speed = 0.0
+        # First calculate total global speed across all downloading tasks
+        global_speed = sum(getattr(task, 'speed', 0.0) for task in self.tasks if task.status == "Downloading")
+        
+        # Build estimated size map per folder name using average of known sibling part sizes
+        folder_estimated_sizes = {}
+        folder_tasks_map = {}
+        all_known_sizes = [t.total_bytes for t in self.tasks if getattr(t, 'total_bytes', 0) > 0]
+        global_avg_size = (sum(all_known_sizes) / len(all_known_sizes)) if all_known_sizes else 0
+        
+        for task in self.tasks:
+            fn = getattr(task, 'folder_name', 'Default')
+            if fn not in folder_tasks_map:
+                folder_tasks_map[fn] = []
+            folder_tasks_map[fn].append(task)
+            
+        for fn, f_tasks in folder_tasks_map.items():
+            known = [t.total_bytes for t in f_tasks if getattr(t, 'total_bytes', 0) > 0]
+            if known:
+                folder_estimated_sizes[fn] = sum(known) / len(known)
+            else:
+                folder_estimated_sizes[fn] = global_avg_size
+
+        cumulative_remaining_bytes = 0
         
         # Update individual tasks
         for task in self.tasks:
@@ -1588,12 +1610,26 @@ class MainWindow(QMainWindow):
             size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if task.total_bytes > 0 else "-"
             
             eta_str = "-"
-            if task.status == "Downloading" and task.speed > 0 and task.total_bytes > 0:
-                remaining_bytes = task.total_bytes - task.downloaded_bytes
-                eta_seconds = remaining_bytes / (task.speed * 1024 * 1024)
-                eta_str = self.format_eta(eta_seconds)
+            if task.status == "Downloading":
+                remaining_bytes = max(0, task.total_bytes - task.downloaded_bytes)
+                cumulative_remaining_bytes += remaining_bytes
+                if task.speed > 0 and task.total_bytes > 0:
+                    eta_seconds = remaining_bytes / (task.speed * 1024 * 1024)
+                    eta_str = self.format_eta(eta_seconds)
+                task.tree_item.setToolTip(5, "")
+            elif task.status in ("Pending", "Queued", "Starting..."):
+                fn = getattr(task, 'folder_name', 'Default')
+                if task.total_bytes > 0:
+                    task_rem = max(0, task.total_bytes - task.downloaded_bytes)
+                else:
+                    task_rem = folder_estimated_sizes.get(fn, 0)
+                    
+                cumulative_remaining_bytes += task_rem
+                eta_str = "-"
+                task.tree_item.setToolTip(5, "Waiting in queue")
             elif task.status in ("Completed", "Extracted", "Extracting..."):
                 eta_str = "-"
+                task.tree_item.setToolTip(5, "")
             
             task.tree_item.setText(2, task.status)
             # Apply word wrap to the tooltip text to avoid very long horizontal lines
@@ -1608,10 +1644,29 @@ class MainWindow(QMainWindow):
             task.tree_item.setText(5, eta_str)
             task.tree_item.setText(6, size_str)
             
-            if task.status == "Downloading":
-                global_speed += task.speed
-                
-        self.global_speed_label.setText(f"Global Speed: {global_speed:.2f} MB/s")
+        # Update global speed and queue status label
+        active_tasks = [t for t in self.tasks if t.status in ("Downloading", "Starting...")]
+        pending_tasks = [t for t in self.tasks if t.status in ("Pending", "Queued")]
+        active_count = len(active_tasks)
+        pending_count = len(pending_tasks)
+        
+        total_remaining = 0
+        for t in active_tasks + pending_tasks:
+            if t.total_bytes > 0:
+                total_remaining += max(0, t.total_bytes - t.downloaded_bytes)
+            else:
+                fn = getattr(t, 'folder_name', 'Default')
+                total_remaining += folder_estimated_sizes.get(fn, 0)
+
+        if global_speed > 0 and total_remaining > 0:
+            queue_eta_seconds = total_remaining / (global_speed * 1024 * 1024)
+            queue_eta_str = self.format_eta(queue_eta_seconds)
+            self.global_speed_label.setText(f"Global Speed: {global_speed:.2f} MB/s | Total Queue ETA: {queue_eta_str} ({active_count} active, {pending_count} pending)")
+        elif active_count > 0 or pending_count > 0:
+            self.global_speed_label.setText(f"Global Speed: {global_speed:.2f} MB/s | ({active_count} active, {pending_count} pending)")
+        else:
+            self.global_speed_label.setText(f"Global Speed: {global_speed:.2f} MB/s")
+
         if hasattr(self, 'speed_graph'):
             self.speed_graph.add_data_point(global_speed)
             
@@ -1635,7 +1690,11 @@ class MainWindow(QMainWindow):
                 task = next((t for t in self.tasks if t.tree_item == child), None)
                 if task:
                     total_dl += task.downloaded_bytes
-                    total_size += task.total_bytes
+                    if task.total_bytes > 0:
+                        total_size += task.total_bytes
+                    else:
+                        fn = getattr(task, 'folder_name', 'Default')
+                        total_size += folder_estimated_sizes.get(fn, 0)
                     total_speed += getattr(task, 'speed', 0.0)
                     
                     if task.status not in ("Completed", "Extracted"):
@@ -1666,10 +1725,14 @@ class MainWindow(QMainWindow):
             size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if total_size > 0 else "-"
             
             eta_str = "-"
-            if any_downloading and total_speed > 0 and total_size > 0:
-                remaining_bytes = total_size - total_dl
-                eta_seconds = remaining_bytes / (total_speed * 1024 * 1024)
-                eta_str = self.format_eta(eta_seconds)
+            remaining_batch_bytes = max(0, total_size - total_dl)
+            if any_downloading and remaining_batch_bytes > 0:
+                if total_speed > 0:
+                    eta_seconds = remaining_batch_bytes / (total_speed * 1024 * 1024)
+                    eta_str = self.format_eta(eta_seconds)
+                elif global_speed > 0:
+                    eta_seconds = remaining_batch_bytes / (global_speed * 1024 * 1024)
+                    eta_str = f"~{self.format_eta(eta_seconds)}"
             
             batch_item.setText(2, batch_status)
             batch_item.setToolTip(2, "")
