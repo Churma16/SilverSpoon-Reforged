@@ -33,6 +33,10 @@ from core.types import TaskStatus, BatchStatus
 from core.extractors.fuckingfast import FuckingFastExtractor
 from core.download_manager import DownloadManager
 from core.extraction_manager import ExtractionManager
+from ui.action_bar import ActionBarWidget
+from ui.directory_bar import DirectoryBarWidget
+from ui.url_input_bar import UrlInputBarWidget
+from ui.menus import setup_menu_bar
 from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog
 from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
 from utils.formatters import format_error_message
@@ -101,7 +105,7 @@ class MainWindow(QMainWindow):
         )
         
         def check_extraction_callback():
-            if hasattr(self, 'extract_checkbox') and self.extract_checkbox.isChecked():
+            if hasattr(self, 'action_bar') and self.action_bar.extract_checkbox.isChecked():
                 self.extraction_manager.check_extraction()
 
         self.download_manager.start(check_extraction_callback)
@@ -204,218 +208,87 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def setup_ui(self):
-        # Menu Bar Setup
-        menu_bar = self.menuBar()
-        
-        # File Menu
-        file_menu = menu_bar.addMenu("&File")
-        
-        import_action = QAction("&Import Links from File...", self)
-        import_action.triggered.connect(self.import_links_from_file)
-        file_menu.addAction(import_action)
-        
-        settings_action = QAction("&Settings", self)
-        settings_action.triggered.connect(self.open_settings_dialog)
-        file_menu.addAction(settings_action)
-        
-        file_menu.addSeparator()
-        
-        exit_action = QAction("&Exit", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-        
-        # Help Menu
-        help_menu = menu_bar.addMenu("&Help")
-        
-        github_action = QAction("&GitHub Repository", self)
-        github_action.triggered.connect(self.open_github_link)
-        help_menu.addAction(github_action)
-        
-        contact_action = QAction("&Contact Us", self)
-        contact_action.triggered.connect(self.open_contact_link)
-        help_menu.addAction(contact_action)
-        
-        contributing_action = QAction("C&ontributing Guide", self)
-        contributing_action.triggered.connect(self.show_contributing_dialog)
-        help_menu.addAction(contributing_action)
-        
-        changelog_action = QAction("View &Changelog", self)
-        changelog_action.triggered.connect(self.show_changelog_dialog)
-        help_menu.addAction(changelog_action)
-        
-        help_menu.addSeparator()
-        
-        welcome_action = QAction("&Welcome", self)
-        welcome_action.triggered.connect(self.show_warning_dialog_manual)
-        help_menu.addAction(welcome_action)
-        
-        check_update_action = QAction("Check for &Updates...", self)
-        check_update_action.triggered.connect(self.manual_update_check)
-        help_menu.addAction(check_update_action)
-
-        about_menu = menu_bar.addMenu("&About")
-        
-        about_action = QAction("&About SilverSpoon Reforged", self)
-        about_action.triggered.connect(self.show_about_dialog)
-        about_menu.addAction(about_action)
+        setup_menu_bar(self)
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(6)
         
         # 1. Directory Section
-        dir_layout = QHBoxLayout()
-        dir_layout.addWidget(QLabel("Base Save Directory:"))
         default_dir = self.settings.get("default_save_dir", os.path.join(os.path.expanduser("~"), "Downloads"))
-        self.dir_input = QLineEdit(default_dir)
-        dir_layout.addWidget(self.dir_input)
-        browse_btn = QPushButton("Browse...")
-        browse_btn.clicked.connect(self.browse_dir)
-        dir_layout.addWidget(browse_btn)
-        main_layout.addLayout(dir_layout)
+        self.dir_bar = DirectoryBarWidget(default_dir, self)
+        self.dir_input = self.dir_bar.dir_input
+        main_layout.addWidget(self.dir_bar)
         
-        # 2. Links & Global Stats Section
-        stats_layout = QHBoxLayout()
-        stats_layout.addWidget(QLabel("Paste Links or HTML Block Here:"))
+        # 2. Input Section
+        self.url_bar = UrlInputBarWidget(self)
+        self.url_bar.add_links_requested.connect(self.add_links)
+        self.global_speed_label = self.url_bar.global_speed_label
+        self.text_links = self.url_bar.text_links
+        self.speed_graph = self.url_bar.speed_graph
+        main_layout.addWidget(self.url_bar)
         
-        paste_btn = QPushButton("Paste from Clipboard")
-        paste_btn.clicked.connect(self.paste_from_clipboard)
-        stats_layout.addWidget(paste_btn)
-        
-        stats_layout.addStretch()
-        self.global_speed_label = QLabel("Global Speed: 0.00 MB/s")
-        self.global_speed_label.setStyleSheet("font-weight: bold; color: #2ecc71;")
-        stats_layout.addWidget(self.global_speed_label)
-        main_layout.addLayout(stats_layout)
-
-        # Traffic / Speed Graph
-        self.speed_graph = SpeedGraphWidget(self)
-        main_layout.addWidget(self.speed_graph)
-        
-        self.text_links = QTextEdit()
-        self.text_links.setAcceptRichText(False)
-        self.text_links.setMaximumHeight(80)
-        main_layout.addWidget(self.text_links)
-        
-        add_btn = QPushButton("Add Links to Queue")
-        add_btn.setStyleSheet("background-color: #2e55cc; color: white; font-weight: bold; padding: 6px;")
-        add_btn.clicked.connect(self.add_links)
-        main_layout.addWidget(add_btn)
-        
-        # 3. Table/Tree Section
+        # 3. Tree View Section
         self.tree = ReorderableTreeWidget()
+        self.tree.order_changed.connect(self.sync_tasks_order_from_tree)
         self.tree.setColumnCount(7)
         self.tree.setHeaderLabels(["Filename / Folder", "Sel", "Status", "Progress", "Speed", "ETA", "Size"])
         
-        self.tree.setDragEnabled(True)
-        self.tree.setAcceptDrops(True)
-        self.tree.setDropIndicatorShown(True)
-        self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.tree.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.tree.order_changed.connect(self.sync_tasks_order_from_tree)
-
-        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.tree.setColumnWidth(1, 40)
-        self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.tree.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.tree.header().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.tree.header().setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
-        self.tree.header().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
+        header = self.tree.header()
+        for i in range(7):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         
-        # Load saved column widths if available
-        saved_widths = self.settings.get("column_widths", {})
-        if saved_widths:
-            for i in range(self.tree.columnCount()):
-                width = saved_widths.get(str(i))
-                if width:
-                    self.tree.setColumnWidth(i, width)
-        else:
-            self.tree.setColumnWidth(0, 300)
-            self.tree.setColumnWidth(2, 100)
-            self.tree.setColumnWidth(3, 80)
-            self.tree.setColumnWidth(4, 80)
-            self.tree.setColumnWidth(5, 80)
-            self.tree.setColumnWidth(6, 120)
-        
+        col_widths = self.settings.get("column_widths", {})
+        default_widths = {0: 380, 1: 45, 2: 100, 3: 80, 4: 80, 5: 80, 6: 100}
+        for col, width in default_widths.items():
+            saved_w = col_widths.get(str(col), width)
+            self.tree.setColumnWidth(col, int(saved_w))
+            
         self.tree.header().moveSection(1, 0)
-        
         self.tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.show_tree_context_menu)
-        
         self.tree.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.tree.installEventFilter(self)
-        
         self.tree.itemClicked.connect(self.handle_item_clicked)
         self.tree.itemSelectionChanged.connect(self.handle_item_selection_changed)
         self.tree.setStyleSheet("""
             QTreeView::indicator { width: 16px; height: 16px; }
             QTreeView::item:selected { outline: none; }
         """)
-        main_layout.addWidget(self.tree)
+        main_layout.addWidget(self.tree, stretch=1)
         
         # 4. Action Section
-        action_layout = QHBoxLayout()
-        
-        self.select_all_btn = QPushButton("Select All")
-        self.select_all_btn.clicked.connect(self.toggle_select_all)
-        action_layout.addWidget(self.select_all_btn)
-        
-        self.start_btn = QPushButton("Start / Resume")
-        self.start_btn.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold; padding: 6px;")
-        self.start_btn.clicked.connect(self.start_downloads)
-        action_layout.addWidget(self.start_btn)
-        
-        self.pause_btn = QPushButton("Pause")
-        self.pause_btn.setStyleSheet("background-color: #f39c12; color: white; font-weight: bold; padding: 6px;")
-        self.pause_btn.clicked.connect(self.pause_selected)
-        action_layout.addWidget(self.pause_btn)
-        
-        self.cancel_btn = QPushButton("Cancel")
-        self.cancel_btn.setStyleSheet("background-color: #e74c3c; color: white; font-weight: bold; padding: 6px;")
-        self.cancel_btn.clicked.connect(self.cancel_selected)
-        action_layout.addWidget(self.cancel_btn)
-        
-        self.retry_btn = QPushButton("Retry")
-        self.retry_btn.setStyleSheet("background-color: #9b59b6; color: white; font-weight: bold; padding: 6px;")
-        self.retry_btn.clicked.connect(self.retry_selected)
-        action_layout.addWidget(self.retry_btn)
+        self.action_bar = ActionBarWidget(self.settings, self)
+        self.select_all_btn = self.action_bar.select_all_btn
+        self.start_btn = self.action_bar.start_btn
+        self.pause_btn = self.action_bar.pause_btn
+        self.cancel_btn = self.action_bar.cancel_btn
+        self.retry_btn = self.action_bar.retry_btn
+        self.force_redownload_btn = self.action_bar.force_redownload_btn
+        self.copy_log_btn = self.action_bar.copy_log_btn
+        self.delete_btn = self.action_bar.delete_btn
+        self.extract_checkbox = self.action_bar.extract_checkbox
+        self.shutdown_checkbox = self.action_bar.shutdown_checkbox
+        self.clear_btn = self.action_bar.clear_btn
 
-        self.force_redownload_btn = QPushButton("Force Redownload")
-        self.force_redownload_btn.setStyleSheet("background-color: #300101; color: white; font-weight: bold; padding: 6px;")
-        self.force_redownload_btn.clicked.connect(self.force_redownload_selected)
-        action_layout.addWidget(self.force_redownload_btn)
+        self.action_bar.select_all_clicked.connect(self.toggle_select_all)
+        self.action_bar.start_clicked.connect(self.start_downloads)
+        self.action_bar.pause_clicked.connect(self.pause_selected)
+        self.action_bar.cancel_clicked.connect(self.cancel_selected)
+        self.action_bar.retry_clicked.connect(self.retry_selected)
+        self.action_bar.force_redownload_clicked.connect(self.force_redownload_selected)
+        self.action_bar.copy_log_clicked.connect(self.copy_selected_error_log)
+        self.action_bar.delete_clicked.connect(self.delete_selected)
+        self.action_bar.clear_completed_clicked.connect(self.clear_finished)
+        self.action_bar.extract_changed.connect(lambda val: self.save_setting_key("extract_after_download", val))
+        self.action_bar.shutdown_changed.connect(lambda val: self.save_setting_key("auto_shutdown_on_completion", val))
 
-        self.copy_log_btn = QPushButton("Copy Error Details")
-        self.copy_log_btn.setStyleSheet("background-color: #555; color: white; font-weight: bold; padding: 6px;")
-        self.copy_log_btn.clicked.connect(self.copy_selected_error_log)
-        action_layout.addWidget(self.copy_log_btn)
-        
-        self.delete_btn = QPushButton("[delete] Delete")
-        self.delete_btn.setStyleSheet("background-color: #34495e; color: white; font-weight: bold; padding: 6px;")
-        self.delete_btn.clicked.connect(self.delete_selected)
-        action_layout.addWidget(self.delete_btn)
-        
-        action_layout.addStretch()
-        
-        self.extract_checkbox = QCheckBox("Extract after download")
-        self.extract_checkbox.setChecked(self.settings.get("extract_after_download", False))
-        self.extract_checkbox.stateChanged.connect(lambda: self.save_setting_key("extract_after_download", self.extract_checkbox.isChecked()))
-        action_layout.addWidget(self.extract_checkbox)
-
-        self.shutdown_checkbox = QCheckBox("Auto-shutdown when done")
-        self.shutdown_checkbox.setChecked(self.settings.get("auto_shutdown_on_completion", False))
-        self.shutdown_checkbox.stateChanged.connect(lambda: self.save_setting_key("auto_shutdown_on_completion", self.shutdown_checkbox.isChecked()))
-        action_layout.addWidget(self.shutdown_checkbox)
-        
-        clear_btn = QPushButton("Clear Completed")
-        clear_btn.clicked.connect(self.clear_finished)
-        action_layout.addWidget(clear_btn)
-        
-        main_layout.addLayout(action_layout)
+        main_layout.addWidget(self.action_bar)
 
         # 5. Session Statistics Section
         self.session_stats_widget = SessionStatsWidget(self)
@@ -617,10 +490,10 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to read file:\n{e}")
 
     def open_github_link(self):
-        QDesktopServices.openUrl(QUrl("https://github.com/billysams21/SilverSpoon"))
+        QDesktopServices.openUrl(QUrl(f"https://github.com/{GITHUB_REPO}"))
         
     def open_contact_link(self):
-        QDesktopServices.openUrl(QUrl("https://github.com/billysams21/SilverSpoon/issues"))
+        QDesktopServices.openUrl(QUrl(f"https://github.com/{GITHUB_REPO}/issues"))
 
     def show_contributing_dialog(self):
         QMessageBox.information(self, "Contributing Guide",
@@ -1037,7 +910,7 @@ class MainWindow(QMainWindow):
             if clicked_btn == btn_cancel:
                 return
             elif clicked_btn == btn_failed_only:
-                tasks_to_redownload = [t for t in tasks_to_redownload if t.status in (TaskStatus.FAILED, TaskStatus.EXTRACT_ERROR, TaskStatus.ERROR_DIRECT_LINK)]
+                tasks_to_redownload = [t for t in tasks_to_redownload if t.status in (TaskStatus.FAILED, TaskStatus.EXTRACT_ERROR) or "Error" in str(t.status) or "Failed" in str(t.status)]
                 if not tasks_to_redownload:
                     QMessageBox.information(self, "No Failed Tasks", "None of the selected tasks were in a failed state.")
                     return
@@ -1359,6 +1232,11 @@ class MainWindow(QMainWindow):
             elif batch_status == BatchStatus.HAS_FAILURES and (folder_name + "_err") not in self.notified_batches:
                 self.notified_batches.add(folder_name + "_err")
                 self.send_notification("Batch Error", f"Batch '{folder_name}' has tasks with errors.", QSystemTrayIcon.MessageIcon.Warning)
+
+        # Contextually enable/disable action buttons via ActionBarWidget
+        selected_tasks = self.get_selected_tasks()
+        if hasattr(self, 'action_bar'):
+            self.action_bar.update_states(self.tasks, selected_tasks)
 
         # Update Session Statistics Panel
         if hasattr(self, 'session_stats_widget'):
