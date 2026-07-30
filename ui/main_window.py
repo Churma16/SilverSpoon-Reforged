@@ -26,6 +26,7 @@ from core.rate_limiter import GlobalRateLimiter
 from core.settings import load_settings, save_settings, get_settings_path, CURRENT_VERSION, GITHUB_REPO, OLD_EXE_CLEANUP_MARKER_SUFFIX
 from core.history import load_history, save_history
 from core.download_task import DownloadTask
+from core.types import TaskStatus, BatchStatus
 from core.extractors.fuckingfast import FuckingFastExtractor
 from ui.dialogs import WarningDialog, SettingsDialog
 from ui.widgets import SpeedGraphWidget
@@ -130,14 +131,14 @@ class MainWindow(QMainWindow):
 
     def pause_all(self):
         for task in self.tasks:
-            if task.status in ("Downloading", "Pending", "Starting..."):
+            if task.status in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING):
                 task.pause_flag = True
-                task.status = "Paused"
+                task.status = TaskStatus.PAUSED
 
     def resume_all(self):
         for task in self.tasks:
-            if task.status in ("Paused", "Queued", "Error", "Cancelled"):
-                task.status = "Pending"
+            if task.status in (TaskStatus.PAUSED, TaskStatus.STANDBY, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                task.status = TaskStatus.IN_QUEUE
                 task.pause_flag = False
 
     def force_quit(self):
@@ -391,7 +392,7 @@ class MainWindow(QMainWindow):
             if event.key() == Qt.Key.Key_Space:
                 selected = self.get_selected_tasks()
                 if selected:
-                    if selected[0].status in ("Downloading", "Starting..."):
+                    if selected[0].status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING):
                         self.pause_selected()
                     else:
                         self.start_downloads()
@@ -456,7 +457,7 @@ class MainWindow(QMainWindow):
         check_state = Qt.CheckState.Checked if task.is_selected else Qt.CheckState.Unchecked
         child_item.setCheckState(1, check_state)
         
-        child_item.setText(2, task.status)
+        child_item.setText(2, getattr(task.status, 'value', str(task.status)))
         child_item.setText(3, "0%")
         child_item.setText(4, "-")
         child_item.setText(5, "-")
@@ -470,7 +471,7 @@ class MainWindow(QMainWindow):
 
     def copy_selected_error_log(self):
         for task in self.get_selected_tasks():
-            if "Error" in task.status:
+            if "Error" in str(task.status) or "Failed" in str(task.status):
                 self.copy_error_log(task)
                 return
         QMessageBox.information(self, "No Error Selected", "Select a failed task first, then copy its error details.")
@@ -505,10 +506,10 @@ class MainWindow(QMainWindow):
         for task in loaded_tasks:
             self.add_task_to_ui(task)
             
-            if task.status == "Extracted":
+            if task.status == TaskStatus.EXTRACTED:
                 self.extracted_folders.add(task.folder_name)
-            elif task.status == "Extracting...":
-                task.status = "Completed"
+            elif task.status in (TaskStatus.UNPACKING, "Extracting..."):
+                task.status = TaskStatus.FINISHED
 
     def import_links_from_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Import Links", "", "Text Files (*.txt);;All Files (*)")
@@ -927,32 +928,42 @@ class MainWindow(QMainWindow):
 
     def start_downloads(self):
         for task in self.get_selected_tasks():
-            if task.status in ("Queued", "Cancelled", "Error", "Paused"):
-                task.status = "Pending"
-                task.error_message = ""
-                task.cancel_flag = False
-                task.pause_flag = False
+            if task.status in (TaskStatus.STANDBY, TaskStatus.CANCELLED, TaskStatus.FAILED, TaskStatus.PAUSED, TaskStatus.EXTRACT_ERROR):
+                if os.path.exists(task.filepath) and (task.progress >= 100 or (task.total_bytes > 0 and os.path.getsize(task.filepath) >= task.total_bytes)):
+                    task.progress = 100.0
+                    task.status = TaskStatus.FINISHED
+                    task.error_message = ""
+                else:
+                    task.status = TaskStatus.IN_QUEUE
+                    task.error_message = ""
+                    task.cancel_flag = False
+                    task.pause_flag = False
 
     def pause_selected(self):
         for task in self.get_selected_tasks():
-            if task.status in ("Downloading", "Pending", "Starting..."):
+            if task.status in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING):
                 task.pause_flag = True
-                task.status = "Pausing..." if task.status == "Downloading" else "Paused"
+                task.status = TaskStatus.PAUSING if task.status == TaskStatus.DOWNLOADING else TaskStatus.PAUSED
 
     def cancel_selected(self):
         for task in self.get_selected_tasks():
-            if task.status in ("Downloading", "Pending", "Paused", "Starting...", "Queued"):
+            if task.status in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.PAUSED, TaskStatus.CONNECTING, TaskStatus.STANDBY):
                 task.cancel_flag = True
                 task.pause_flag = False
-                task.status = "Cancelled"
+                task.status = TaskStatus.CANCELLED
 
     def retry_selected(self):
         for task in self.get_selected_tasks():
-            if "Error" in task.status:
-                task.status = "Pending"
-                task.error_message = ""
-                task.cancel_flag = False
-                task.pause_flag = False
+            if "Failed" in str(task.status) or "Error" in str(task.status):
+                if os.path.exists(task.filepath) and (task.progress >= 100 or (task.total_bytes > 0 and os.path.getsize(task.filepath) >= task.total_bytes)):
+                    task.progress = 100.0
+                    task.status = TaskStatus.FINISHED
+                    task.error_message = ""
+                else:
+                    task.status = TaskStatus.IN_QUEUE
+                    task.error_message = ""
+                    task.cancel_flag = False
+                    task.pause_flag = False
 
     def force_redownload_selected(self):
         tasks_to_redownload = self.get_selected_tasks()
@@ -960,7 +971,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "No Selection", "Select one or more tasks to force redownload.")
             return
 
-        active_statuses = {"Downloading", "Pending", "Starting...", "Pausing...", "Extracting..."}
+        active_statuses = {TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING, TaskStatus.PAUSING, TaskStatus.UNPACKING}
         redownloaded = 0
         skipped = 0
         failed = 0
@@ -975,7 +986,7 @@ class MainWindow(QMainWindow):
                     os.remove(task.filepath)
             except Exception as e:
                 failed += 1
-                task.status = "Error"
+                task.status = TaskStatus.FAILED
                 task.error_message = f"Could not delete existing file before redownload. {format_error_message(e)}"
                 continue
 
@@ -986,7 +997,7 @@ class MainWindow(QMainWindow):
             task.downloaded_bytes = 0
             task.total_bytes = 0
             task.error_message = ""
-            task.status = "Pending"
+            task.status = TaskStatus.IN_QUEUE
             self.extracted_folders.discard(task.folder_name)
             redownloaded += 1
 
@@ -1033,7 +1044,7 @@ class MainWindow(QMainWindow):
                 
         for task in tasks_to_delete:
             task.cancel_flag = True
-            task.status = "Cancelled"
+            task.status = TaskStatus.CANCELLED
             
             if delete_files and os.path.exists(task.filepath):
                 try:
@@ -1056,7 +1067,7 @@ class MainWindow(QMainWindow):
         self.trigger_history_save()
                 
     def clear_finished(self):
-        to_remove = [t for t in self.tasks if t.status in ("Completed", "Extracted", "Cancelled")]
+        to_remove = [t for t in self.tasks if t.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED, TaskStatus.CANCELLED)]
         
         if not to_remove:
             return
@@ -1087,7 +1098,7 @@ class MainWindow(QMainWindow):
             return f"{s}s"
 
     def update_ui(self):
-        global_speed = sum(getattr(task, 'speed', 0.0) for task in self.tasks if task.status == "Downloading")
+        global_speed = sum(getattr(task, 'speed', 0.0) for task in self.tasks if task.status == TaskStatus.DOWNLOADING)
         
         folder_estimated_sizes = {}
         folder_tasks_map = {}
@@ -1112,21 +1123,21 @@ class MainWindow(QMainWindow):
         for task in self.tasks:
             if not task.tree_item:
                 continue
-            prog_str = f"{task.progress:.1f}%" if task.status not in ("Extracted", "Extracting...", "Extract Error") else "-"
-            speed_str = f"{task.speed:.2f} MB/s" if task.status == "Downloading" else "-"
+            prog_str = f"{task.progress:.1f}%" if task.status not in (TaskStatus.EXTRACTED, TaskStatus.UNPACKING, TaskStatus.EXTRACT_ERROR) else "-"
+            speed_str = f"{task.speed:.2f} MB/s" if task.status == TaskStatus.DOWNLOADING else "-"
             size_mb = task.total_bytes / (1024*1024)
             dl_mb = task.downloaded_bytes / (1024*1024)
             size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if task.total_bytes > 0 else "-"
             
             eta_str = "-"
-            if task.status == "Downloading":
+            if task.status == TaskStatus.DOWNLOADING:
                 remaining_bytes = max(0, task.total_bytes - task.downloaded_bytes)
                 cumulative_remaining_bytes += remaining_bytes
                 if task.speed > 0 and task.total_bytes > 0:
                     eta_seconds = remaining_bytes / (task.speed * 1024 * 1024)
                     eta_str = self.format_eta(eta_seconds)
                 task.tree_item.setToolTip(5, "")
-            elif task.status in ("Pending", "Queued", "Starting..."):
+            elif task.status in (TaskStatus.IN_QUEUE, TaskStatus.STANDBY, TaskStatus.CONNECTING):
                 fn = getattr(task, 'folder_name', 'Default')
                 if task.total_bytes > 0:
                     task_rem = max(0, task.total_bytes - task.downloaded_bytes)
@@ -1136,12 +1147,12 @@ class MainWindow(QMainWindow):
                 cumulative_remaining_bytes += task_rem
                 eta_str = "-"
                 task.tree_item.setToolTip(5, "Waiting in queue")
-            elif task.status in ("Completed", "Extracted", "Extracting..."):
+            elif task.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED, TaskStatus.UNPACKING):
                 eta_str = "-"
                 task.tree_item.setToolTip(5, "")
             
-            task.tree_item.setText(2, task.status)
-            if "Error" in task.status and task.error_message:
+            task.tree_item.setText(2, str(task.status))
+            if ("Failed" in str(task.status) or "Error" in str(task.status)) and task.error_message:
                 import textwrap
                 wrapped_text = "\n".join(textwrap.wrap(task.error_message, width=60))
                 task.tree_item.setToolTip(2, wrapped_text)
@@ -1152,8 +1163,8 @@ class MainWindow(QMainWindow):
             task.tree_item.setText(5, eta_str)
             task.tree_item.setText(6, size_str)
             
-        active_tasks = [t for t in self.tasks if t.status in ("Downloading", "Starting...")]
-        pending_tasks = [t for t in self.tasks if t.status in ("Pending", "Queued")]
+        active_tasks = [t for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING)]
+        pending_tasks = [t for t in self.tasks if t.status == TaskStatus.IN_QUEUE]
         active_count = len(active_tasks)
         pending_count = len(pending_tasks)
         
@@ -1203,23 +1214,23 @@ class MainWindow(QMainWindow):
                         total_size += folder_estimated_sizes.get(fn, 0)
                     total_speed += getattr(task, 'speed', 0.0)
                     
-                    if task.status not in ("Completed", "Extracted"):
+                    if task.status not in (TaskStatus.FINISHED, TaskStatus.EXTRACTED):
                         all_completed = False
-                    if "Error" in task.status:
+                    if "Failed" in str(task.status) or "Error" in str(task.status):
                         any_error = True
-                    if task.status in ("Downloading", "Starting...", "Pending"):
+                    if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.IN_QUEUE):
                         any_downloading = True
                         
-            batch_status = "Queued"
+            batch_status = BatchStatus.STANDBY
             if all_completed:
-                if any(t.status == "Extracting..." for t in [next((t for t in self.tasks if t.tree_item == batch_item.child(k)), None) for k in range(batch_item.childCount()) if next((t for t in self.tasks if t.tree_item == batch_item.child(k)), None)]):
-                    batch_status = "Extracting..."
+                if any(t.status == TaskStatus.UNPACKING for t in [next((t for t in self.tasks if t.tree_item == batch_item.child(k)), None) for k in range(batch_item.childCount()) if next((t for t in self.tasks if t.tree_item == batch_item.child(k)), None)]):
+                    batch_status = BatchStatus.EXTRACTING
                 else:
-                    batch_status = "Completed"
+                    batch_status = BatchStatus.COMPLETED
             elif any_error:
-                batch_status = "Contains Errors"
+                batch_status = BatchStatus.HAS_FAILURES
             elif any_downloading:
-                batch_status = "Active"
+                batch_status = BatchStatus.ACTIVE
                 
             prog = (total_dl / total_size * 100) if total_size > 0 else 0
             prog_str = f"{prog:.1f}%"
@@ -1238,7 +1249,7 @@ class MainWindow(QMainWindow):
                     eta_seconds = remaining_batch_bytes / (global_speed * 1024 * 1024)
                     eta_str = f"~{self.format_eta(eta_seconds)}"
             
-            batch_item.setText(2, batch_status)
+            batch_item.setText(2, str(batch_status))
             batch_item.setToolTip(2, "")
             batch_item.setText(3, prog_str)
             batch_item.setText(4, speed_str)
@@ -1246,20 +1257,20 @@ class MainWindow(QMainWindow):
             batch_item.setText(6, size_str)
 
             folder_name = batch_item.text(0)
-            if batch_status in ("Completed", "Extracted") and folder_name not in self.notified_batches:
+            if batch_status in (BatchStatus.COMPLETED, TaskStatus.EXTRACTED) and folder_name not in self.notified_batches:
                 self.notified_batches.add(folder_name)
-                self.send_notification("Batch Finished", f"Batch '{folder_name}' is {batch_status.lower()}!")
-            elif batch_status == "Contains Errors" and (folder_name + "_err") not in self.notified_batches:
+                self.send_notification("Batch Finished", f"Batch '{folder_name}' is {str(batch_status).lower()}!")
+            elif batch_status == BatchStatus.HAS_FAILURES and (folder_name + "_err") not in self.notified_batches:
                 self.notified_batches.add(folder_name + "_err")
                 self.send_notification("Batch Error", f"Batch '{folder_name}' has tasks with errors.", QSystemTrayIcon.MessageIcon.Warning)
 
     def download_manager(self):
         while True:
-            active = sum(1 for t in self.tasks if t.status in ("Downloading", "Starting..."))
+            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING))
             if active < self.max_workers:
                 for task in self.tasks:
-                    if task.status == "Pending":
-                        task.status = "Starting..."
+                    if task.status == TaskStatus.IN_QUEUE:
+                        task.status = TaskStatus.CONNECTING
                         threading.Thread(target=self.download_worker, args=(task,), daemon=True).start()
                         active += 1
                         if active >= self.max_workers:
@@ -1281,13 +1292,13 @@ class MainWindow(QMainWindow):
             if folder_name in self.extracted_folders:
                 continue
                 
-            valid_extraction_statuses = {"Completed", "Extracted", "Extracting..."}
+            valid_extraction_statuses = {TaskStatus.FINISHED, TaskStatus.EXTRACTED, TaskStatus.UNPACKING}
             if tasks_in_folder and all(t.status in valid_extraction_statuses for t in tasks_in_folder):
-                if all(t.status == "Extracted" for t in tasks_in_folder):
+                if all(t.status == TaskStatus.EXTRACTED for t in tasks_in_folder):
                     self.extracted_folders.add(folder_name)
                     continue
                     
-                if any(t.status == "Extracting..." for t in tasks_in_folder):
+                if any(t.status == TaskStatus.UNPACKING for t in tasks_in_folder):
                     continue
                     
                 self.extracted_folders.add(folder_name)
@@ -1298,7 +1309,7 @@ class MainWindow(QMainWindow):
         folder_name = tasks_in_folder[0].folder_name
         
         for t in tasks_in_folder:
-            t.status = "Extracting..."
+            t.status = TaskStatus.UNPACKING
             
         try:
             files = os.listdir(save_dir)
@@ -1317,7 +1328,7 @@ class MainWindow(QMainWindow):
                 
             if not first_vol:
                 for t in tasks_in_folder:
-                    t.status = "Extract Error (No File)"
+                    t.status = TaskStatus.EXTRACT_ERROR
                     t.error_message = f"No archive file was found in {save_dir}."
                 if folder_name in self.extracted_folders:
                     self.extracted_folders.remove(folder_name)
@@ -1345,7 +1356,7 @@ class MainWindow(QMainWindow):
                 
             if not cmd:
                 for t in tasks_in_folder:
-                    t.status = "Extract Error (No extractor found)"
+                    t.status = TaskStatus.EXTRACT_ERROR
                     t.error_message = "No supported extractor was found. Install 7-Zip or WinRAR, then retry extraction."
                 if folder_name in self.extracted_folders:
                     self.extracted_folders.remove(folder_name)
@@ -1362,14 +1373,14 @@ class MainWindow(QMainWindow):
             )
             
             for t in tasks_in_folder:
-                t.status = "Extracted"
+                t.status = TaskStatus.EXTRACTED
                 t.error_message = ""
             self.trigger_history_save()
                 
         except subprocess.CalledProcessError as e:
             logging.error(f"Extraction error (subprocess): {e}", exc_info=True)
             for t in tasks_in_folder:
-                t.status = "Extract Error (Corrupt?)"
+                t.status = TaskStatus.EXTRACT_ERROR
                 t.error_message = f"Extractor failed with exit code {e.returncode}. The archive may be corrupt, incomplete, or password-protected."
             if folder_name in self.extracted_folders:
                 self.extracted_folders.remove(folder_name)
@@ -1377,7 +1388,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Extraction error: {e}", exc_info=True)
             for t in tasks_in_folder:
-                t.status = "Extract Error"
+                t.status = TaskStatus.EXTRACT_ERROR
                 t.error_message = f"Extraction failed: {format_error_message(e)}"
             if folder_name in self.extracted_folders:
                 self.extracted_folders.remove(folder_name)
@@ -1391,23 +1402,32 @@ class MainWindow(QMainWindow):
         return direct_link
 
     def download_worker(self, task):
+        # Quick check: If file is already 100% downloaded on disk, finish immediately without network call
+        if os.path.exists(task.filepath) and (task.progress >= 100 or (task.total_bytes > 0 and os.path.getsize(task.filepath) >= task.total_bytes)):
+            task.downloaded_bytes = task.total_bytes if task.total_bytes > 0 else os.path.getsize(task.filepath)
+            task.progress = 100.0
+            task.status = TaskStatus.FINISHED
+            task.error_message = ""
+            self.trigger_history_save()
+            return
+
         dl_url = self.get_direct_link(task)
         if not dl_url:
             if not task.cancel_flag and not task.pause_flag:
-                task.status = "Error"
+                task.status = TaskStatus.FAILED
                 if not task.error_message:
                     task.error_message = "Could not get the direct download link."
             return
             
         if task.cancel_flag:
-            task.status = "Cancelled"
+            task.status = TaskStatus.CANCELLED
             return
             
         if task.pause_flag:
-            task.status = "Paused"
+            task.status = TaskStatus.PAUSED
             return
 
-        task.status = "Downloading"
+        task.status = TaskStatus.DOWNLOADING
         task.error_message = ""
         
         try:
@@ -1415,7 +1435,7 @@ class MainWindow(QMainWindow):
                 try:
                     os.makedirs(task.save_dir, exist_ok=True)
                 except Exception as e:
-                    task.status = "Error"
+                    task.status = TaskStatus.FAILED
                     task.error_message = f"Failed to create save directory '{task.save_dir}'. {format_error_message(e)}"
                     self.trigger_history_save()
                     return
@@ -1431,7 +1451,7 @@ class MainWindow(QMainWindow):
             if initial_size > 0 and initial_size == total_size:
                 task.downloaded_bytes = total_size
                 task.progress = 100
-                task.status = "Completed"
+                task.status = TaskStatus.FINISHED
                 task.error_message = ""
                 return
                 
@@ -1443,7 +1463,7 @@ class MainWindow(QMainWindow):
                 
             with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
                 if r.status_code not in (200, 206):
-                    task.status = "Error"
+                    task.status = TaskStatus.FAILED
                     task.error_message = f"Download request failed. Server returned HTTP {r.status_code}."
                     if r.status_code in (403, 503):
                         preview = r.text[:500] if hasattr(r, 'text') else "No text body"
@@ -1467,11 +1487,11 @@ class MainWindow(QMainWindow):
                 with open(task.filepath, mode) as f:
                     for chunk in r.iter_content(chunk_size=8192*8):
                         if task.pause_flag:
-                            task.status = "Paused"
+                            task.status = TaskStatus.PAUSED
                             task.speed = 0
                             return
                         if task.cancel_flag:
-                            task.status = "Cancelled"
+                            task.status = TaskStatus.CANCELLED
                             task.speed = 0
                             return
                             
@@ -1493,13 +1513,13 @@ class MainWindow(QMainWindow):
                 
                 task.progress = 100
                 task.speed = 0
-                task.status = "Completed"
+                task.status = TaskStatus.FINISHED
                 task.error_message = ""
                 self.trigger_history_save()
                 
         except Exception as e:
             logging.error(f"Download worker error for task {task.link}: {e}", exc_info=True)
             if not task.cancel_flag and not task.pause_flag:
-                task.status = "Error"
+                task.status = TaskStatus.FAILED
                 task.error_message = f"Download failed. {format_error_message(e)}"
                 self.trigger_history_save()
