@@ -19,7 +19,8 @@ class FuckingFastExtractor(BaseExtractor):
             if res.status_code != 200:
                 err_msg = f"Could not open the file page. Server returned HTTP {res.status_code}."
                 if res.status_code in (403, 503):
-                    logging.error(f"Got {res.status_code} for {link}. Response body preview: {res.text[:500]}")
+                    error_body_preview = res.content[:500].decode('utf-8', errors='ignore')
+                    logging.error(f"Got {res.status_code} for {link}. Response body preview: {error_body_preview}")
                 return None, err_msg
             
             post_url = f"https://fuckingfast.co/f/{file_id}/go"

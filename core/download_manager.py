@@ -116,8 +116,9 @@ class DownloadManager:
                     else:
                         task.error_message = f"Download request failed. Server returned HTTP {r.status_code}."
                     if r.status_code in (403, 503):
-                        preview = r.text[:500] if hasattr(r, 'text') else "No text body"
-                        logging.error(f"Download 403/503 for {dl_url}. Body preview: {preview}")
+                        initial_chunk_bytes = next(r.iter_content(chunk_size=500), b"")
+                        error_body_preview = initial_chunk_bytes.decode('utf-8', errors='ignore')
+                        logging.error(f"Download 403/503 for {dl_url}. Body preview: {error_body_preview}")
                     return
                     
                 if r.status_code == 200 and initial_size > 0:
