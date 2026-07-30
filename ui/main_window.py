@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QMessageBox, QInputDialog,
     QMenu, QSystemTrayIcon
 )
-from PyQt6.QtGui import QAction, QDesktopServices, QIcon
+from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QBrush, QColor
 from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent, QMetaObject, Q_ARG
 
 import cloudscraper
@@ -454,7 +454,7 @@ class MainWindow(QMainWindow):
         )
         batch_item.setText(0, folder_name)
         batch_item.setCheckState(1, Qt.CheckState.Unchecked)
-        batch_item.setExpanded(True)
+        batch_item.setExpanded(False)
         return batch_item
 
     def sync_tasks_order_from_tree(self):
@@ -503,7 +503,10 @@ class MainWindow(QMainWindow):
         check_state = Qt.CheckState.Checked if task.is_selected else Qt.CheckState.Unchecked
         child_item.setCheckState(1, check_state)
         
-        child_item.setText(2, getattr(task.status, 'value', str(task.status)))
+        status_val = getattr(task.status, 'value', str(task.status))
+        child_item.setText(2, status_val)
+        status_color = getattr(task.status, 'color', '#ffffff')
+        child_item.setForeground(2, QBrush(QColor(status_color)))
         child_item.setText(3, "0%")
         child_item.setText(4, "-")
         child_item.setText(5, "-")
@@ -1198,6 +1201,8 @@ class MainWindow(QMainWindow):
                 task.tree_item.setToolTip(5, "")
             
             task.tree_item.setText(2, str(task.status))
+            status_color = getattr(task.status, 'color', '#ffffff')
+            task.tree_item.setForeground(2, QBrush(QColor(status_color)))
             if ("Failed" in str(task.status) or "Error" in str(task.status)) and task.error_message:
                 import textwrap
                 wrapped_text = "\n".join(textwrap.wrap(task.error_message, width=60))
@@ -1296,6 +1301,8 @@ class MainWindow(QMainWindow):
                     eta_str = f"~{self.format_eta(eta_seconds)}"
             
             batch_item.setText(2, str(batch_status))
+            status_color = getattr(batch_status, 'color', '#ffffff')
+            batch_item.setForeground(2, QBrush(QColor(status_color)))
             batch_item.setToolTip(2, "")
             batch_item.setText(3, prog_str)
             batch_item.setText(4, speed_str)
