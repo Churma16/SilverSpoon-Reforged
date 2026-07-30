@@ -8,6 +8,9 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 
 ## Features
 
+* **Global Rate Limiting & Throttling:** Features a powerful thread-safe token bucket rate limiter to cap your global download speeds without stalling active connections.
+* **Real-Time Speed Graph:** Includes a custom-painted `SpeedGraphWidget` rendering your historical network bandwidth curves with smooth gradients and peak tracking.
+* **System Tray & Notifications:** Keep SilverSpoon running in the background with a system tray icon and receive desktop notifications when your batches finish downloading or extracting.
 * **Auto-Updater:** (Windows only) Automatically checks for, downloads, and applies new updates so you are always on the latest version without manual `.zip` downloads.
 * **Cross-Platform Extraction:** Built-in auto-extraction support for Windows (bundled `7z`), as well as Linux and macOS (via `/usr/bin/7z` / `p7zip`).
 * **Cloudflare Bypass:** Uses `cloudscraper` to mimic a real browser and bypass anti-bot challenges.
@@ -20,7 +23,7 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 * **Customizable UI & Shortcuts:** Interactive, resizable columns that save their state, plus right-click context menus and handy keyboard shortcuts (e.g., `Space` to pause/resume, `Delete` to remove tasks).
 * **File Management:** Safely delete tasks and optionally remove their associated physical files from your disk, or use "Force Redownload" to wipe and restart a corrupted file.
 * **Error Diagnostics:** Hover over failed tasks for detailed tooltips, and easily copy error logs for quick troubleshooting.
-* **Direct Link Extraction:** Automatically simulates the internal HTMX POST requests required to fetch the real `.rar` direct links.
+* **Direct Link Extraction:** Automatically simulates the internal HTMX POST requests and scrapes raw HTML to fetch the real `.rar` direct links.
 * **Multi-threading:** Downloads multiple parts concurrently (default 3 workers, customizable in Settings) to maximize bandwidth.
 * **Pause, Resume & Retry:** Safely pause your downloads, recover from network drops, or quickly retry errored links using HTTP `Range` headers.
 * **Graphical Interface:** Includes a clean, modern GUI built with PyQt6.
