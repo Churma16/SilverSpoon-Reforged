@@ -20,7 +20,10 @@ from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QBrush, QColor
 from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent, QMetaObject, Q_ARG
 
 import cloudscraper
-from update_logic import UpdateCheckerThread, UpdateDownloaderDialog
+from update_logic import (
+    UpdateCheckerThread, UpdateDownloaderDialog,
+    extract_and_verify_update, perform_exe_replacement, launch_restart_script
+)
 
 from core.rate_limiter import GlobalRateLimiter
 from core.settings import load_settings, save_settings, get_settings_path, CURRENT_VERSION, GITHUB_REPO, OLD_EXE_CLEANUP_MARKER_SUFFIX
@@ -28,9 +31,12 @@ from core.history import load_history, save_history
 from core.download_task import DownloadTask
 from core.types import TaskStatus, BatchStatus
 from core.extractors.fuckingfast import FuckingFastExtractor
+from core.download_manager import DownloadManager
+from core.extraction_manager import ExtractionManager
 from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog
 from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
 from utils.formatters import format_error_message
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -76,14 +82,39 @@ class MainWindow(QMainWindow):
             self.update_checker.check_finished.connect(self.update_last_check_time)
             self.update_checker.start()
             
-        # Start Background Download Manager
-        self.manager_thread = threading.Thread(target=self.download_manager, daemon=True)
-        self.manager_thread.start()
+        self.extraction_manager = ExtractionManager(
+            self.tasks,
+            self.extracted_folders,
+            self.base_dir,
+            self.trigger_history_save
+        )
+        
+        self.download_manager = DownloadManager(
+            self.tasks,
+            self.max_workers,
+            self.rate_limiter,
+            self.scraper,
+            self.extractor,
+            self.settings,
+            self.add_session_downloaded_bytes,
+            self.trigger_history_save
+        )
+        
+        def check_extraction_callback():
+            if hasattr(self, 'extract_checkbox') and self.extract_checkbox.isChecked():
+                self.extraction_manager.check_extraction()
+
+        self.download_manager.start(check_extraction_callback)
         
         # UI Updater Timer
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_ui)
         self.timer.start(500) # update every 500ms
+
+    def add_session_downloaded_bytes(self, size):
+        with self.session_bytes_lock:
+            self.session_downloaded_bytes += size
+
 
     def setup_system_tray(self):
         icon_path = os.path.join(self.base_dir, 'SilverSpoon.ico')
@@ -692,22 +723,8 @@ class MainWindow(QMainWindow):
         dl_dialog = UpdateDownloaderDialog(download_url, self)
         if dl_dialog.exec() == QDialog.DialogCode.Accepted:
             zip_path = dl_dialog.temp_zip
-            extract_dir = os.path.join(tempfile.gettempdir(), f"silverspoon_extract_{int(time.time())}")
-            
             try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(extract_dir)
-                    
-                new_exe_path = None
-                for root, _, files in os.walk(extract_dir):
-                    for file in files:
-                        if file.lower() == "silverspoon.exe":
-                            new_exe_path = os.path.join(root, file)
-                            break
-                            
-                if not new_exe_path:
-                    raise Exception("Could not find SilverSpoon.exe inside the downloaded zip.")
-                    
+                extract_dir, new_exe_path = extract_and_verify_update(zip_path)
                 current_exe = sys.executable
                 current_exe_name = os.path.basename(current_exe)
                 
@@ -733,27 +750,7 @@ class MainWindow(QMainWindow):
                     return
                 
                 old_exe_path = current_exe + ".old"
-                
-                if os.path.exists(old_exe_path):
-                    try:
-                        os.remove(old_exe_path)
-                    except Exception:
-                        pass
-                
-                os.rename(current_exe, old_exe_path)
-                
-                copy_success = False
-                for _ in range(10):
-                    try:
-                        shutil.copy2(new_exe_path, current_exe)
-                        copy_success = True
-                        break
-                    except PermissionError:
-                        time.sleep(0.5)
-                        
-                if not copy_success:
-                    os.rename(old_exe_path, current_exe)
-                    raise Exception("Could not copy the new executable. It might be locked by your Antivirus.")
+                perform_exe_replacement(new_exe_path, current_exe, old_exe_path)
                 
                 try:
                     shutil.rmtree(extract_dir, ignore_errors=True)
@@ -783,32 +780,14 @@ class MainWindow(QMainWindow):
                 save_history(self.tasks)
                 save_settings(self.settings)
                 
-                bat_path = os.path.join(tempfile.gettempdir(), f"silverspoon_restart_{int(time.time())}.bat")
-                with open(bat_path, 'w') as bat:
-                    bat.write('@echo off\n')
-                    bat.write('set PYINSTALLER_RESET_ENVIRONMENT=1\n')
-                    bat.write('set _MEIPASS=\n')
-                    bat.write('set _MEIPASS2=\n')
-                    bat.write('ping 127.0.0.1 -n 4 > nul\n')
-                    bat.write(f'start "" /wait "{current_exe}"\n')
-                    bat.write('if errorlevel 1 goto cleanup\n')
-                    bat.write(f'if exist "{cleanup_marker}" del /f /q "{old_exe_path}" > nul 2>&1\n')
-                    bat.write(f'if not exist "{old_exe_path}" if exist "{cleanup_marker}" del /q "{cleanup_marker}" > nul 2>&1\n')
-                    bat.write(':cleanup\n')
-                    bat.write(f'del "%~f0"\n')
-                
-                CREATE_NO_WINDOW = 0x08000000
-                subprocess.Popen(
-                    [bat_path],
-                    creationflags=CREATE_NO_WINDOW,
-                    close_fds=True
-                )
+                launch_restart_script(current_exe, old_exe_path, cleanup_marker)
                 
                 QApplication.quit()
                 sys.exit(0)
                 
             except Exception as e:
                 QMessageBox.critical(self, "Update Failed", f"Failed to apply the update:\n{str(e)}")
+
 
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.settings, self)
@@ -1441,268 +1420,4 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Failed to execute system shutdown: {e}")
 
-    def download_manager(self):
-        while True:
-            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING))
-            if active < self.max_workers:
-                for task in self.tasks:
-                    if task.status == TaskStatus.IN_QUEUE:
-                        task.status = TaskStatus.CONNECTING
-                        threading.Thread(target=self.download_worker, args=(task,), daemon=True).start()
-                        active += 1
-                        if active >= self.max_workers:
-                            break
-            
-            if self.extract_checkbox.isChecked():
-                self.check_extraction()
-                
-            time.sleep(1)
-            
-    def check_extraction(self):
-        folders = {}
-        for task in self.tasks:
-            if task.folder_name not in folders:
-                folders[task.folder_name] = []
-            folders[task.folder_name].append(task)
-            
-        for folder_name, tasks_in_folder in folders.items():
-            if folder_name in self.extracted_folders:
-                continue
-                
-            valid_extraction_statuses = {TaskStatus.FINISHED, TaskStatus.EXTRACTED, TaskStatus.UNPACKING}
-            if tasks_in_folder and all(t.status in valid_extraction_statuses for t in tasks_in_folder):
-                if all(t.status == TaskStatus.EXTRACTED for t in tasks_in_folder):
-                    self.extracted_folders.add(folder_name)
-                    continue
-                    
-                if any(t.status == TaskStatus.UNPACKING for t in tasks_in_folder):
-                    continue
-                    
-                self.extracted_folders.add(folder_name)
-                threading.Thread(target=self.extract_folder, args=(tasks_in_folder,), daemon=True).start()
 
-    def extract_folder(self, tasks_in_folder):
-        save_dir = tasks_in_folder[0].save_dir
-        folder_name = tasks_in_folder[0].folder_name
-        
-        for t in tasks_in_folder:
-            t.status = TaskStatus.UNPACKING
-            
-        try:
-            files = os.listdir(save_dir)
-            files.sort()
-            
-            first_vol = None
-            for f in files:
-                if re.search(r'\.part0*1\.rar$', f, re.IGNORECASE) or \
-                   re.search(r'\.001$', f) or \
-                   (f.lower().endswith('.rar') and not re.search(r'\.part\d+\.rar$', f, re.IGNORECASE)):
-                    first_vol = os.path.join(save_dir, f)
-                    break
-                    
-            if not first_vol and files:
-                first_vol = os.path.join(save_dir, files[0])
-                
-            if not first_vol:
-                for t in tasks_in_folder:
-                    t.status = TaskStatus.EXTRACT_ERROR
-                    t.error_message = f"No archive file was found in {save_dir}."
-                if folder_name in self.extracted_folders:
-                    self.extracted_folders.remove(folder_name)
-                return
-                
-            cmd = None
-            if sys.platform == 'win32':
-                if hasattr(sys, '_MEIPASS'):
-                    bundled_7z = os.path.join(sys._MEIPASS, '7z.exe')
-                else:
-                    bundled_7z = os.path.normpath(os.path.join(self.base_dir, '7z.exe'))
-                installed_7z = r"C:\Program Files\7-Zip\7z.exe"
-                installed_winrar = r"C:\Program Files\WinRAR\WinRAR.exe"
-                if os.path.exists(installed_7z):
-                    cmd = [installed_7z, 'x', first_vol, f'-o{save_dir}', '-y']
-                elif os.path.exists(installed_winrar):
-                    cmd = [installed_winrar, 'x', '-y', first_vol, f'{save_dir}\\']
-                elif os.path.exists(bundled_7z):
-                    cmd = [bundled_7z, 'x', first_vol, f'-o{save_dir}', '-y']
-            else:
-                if shutil.which('7z'):
-                    cmd = ['7z', 'x', first_vol, f'-o{save_dir}', '-y']
-                elif shutil.which('unrar'):
-                    cmd = ['unrar', 'x', first_vol, f'{save_dir}/', '-y']
-                
-            if not cmd:
-                for t in tasks_in_folder:
-                    t.status = TaskStatus.EXTRACT_ERROR
-                    t.error_message = "No supported extractor was found. Install 7-Zip or WinRAR, then retry extraction."
-                if folder_name in self.extracted_folders:
-                    self.extracted_folders.remove(folder_name)
-                return
-                
-            creationflags = 0x08000000 if sys.platform == 'win32' else 0
-            subprocess.run(
-                cmd,
-                check=True,
-                creationflags=creationflags,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL
-            )
-            
-            for t in tasks_in_folder:
-                t.status = TaskStatus.EXTRACTED
-                t.error_message = ""
-            self.trigger_history_save()
-                
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Extraction error (subprocess): {e}", exc_info=True)
-            for t in tasks_in_folder:
-                t.status = TaskStatus.EXTRACT_ERROR
-                t.error_message = f"Extractor failed with exit code {e.returncode}. The archive may be corrupt, incomplete, or password-protected."
-            if folder_name in self.extracted_folders:
-                self.extracted_folders.remove(folder_name)
-            self.trigger_history_save()
-        except Exception as e:
-            logging.error(f"Extraction error: {e}", exc_info=True)
-            for t in tasks_in_folder:
-                t.status = TaskStatus.EXTRACT_ERROR
-                t.error_message = f"Extraction failed: {format_error_message(e)}"
-            if folder_name in self.extracted_folders:
-                self.extracted_folders.remove(folder_name)
-            self.trigger_history_save()
-
-    def get_direct_link(self, task):
-        direct_link, err_msg = self.extractor.extract_direct_url(task.link, task.file_id)
-        if not direct_link:
-            task.error_message = err_msg or "Could not get the direct download link. The link may be expired or blocked."
-            return None
-        return direct_link
-
-    def download_worker(self, task):
-        # Quick check: If file is already 100% downloaded on disk, finish immediately without network call
-        if os.path.exists(task.filepath) and (task.progress >= 100 or (task.total_bytes > 0 and os.path.getsize(task.filepath) >= task.total_bytes)):
-            task.downloaded_bytes = task.total_bytes if task.total_bytes > 0 else os.path.getsize(task.filepath)
-            task.progress = 100.0
-            task.status = TaskStatus.FINISHED
-            task.error_message = ""
-            self.trigger_history_save()
-            return
-
-        dl_url = self.get_direct_link(task)
-        if not dl_url:
-            if not task.cancel_flag and not task.pause_flag:
-                task.status = TaskStatus.FAILED
-                if not task.error_message:
-                    task.error_message = "Could not get the direct download link."
-            return
-            
-        if task.cancel_flag:
-            task.status = TaskStatus.CANCELLED
-            return
-            
-        if task.pause_flag:
-            task.status = TaskStatus.PAUSED
-            return
-
-        task.status = TaskStatus.DOWNLOADING
-        task.error_message = ""
-        
-        try:
-            if not os.path.exists(task.save_dir):
-                try:
-                    os.makedirs(task.save_dir, exist_ok=True)
-                except Exception as e:
-                    task.status = TaskStatus.FAILED
-                    task.error_message = f"Failed to create save directory '{task.save_dir}'. {format_error_message(e)}"
-                    self.trigger_history_save()
-                    return
-                
-            initial_size = 0
-            if os.path.exists(task.filepath):
-                initial_size = os.path.getsize(task.filepath)
-                
-            head_req = self.scraper.head(dl_url)
-            total_size = int(head_req.headers.get('content-length', 0))
-            task.total_bytes = total_size
-            
-            if initial_size > 0 and initial_size == total_size:
-                task.downloaded_bytes = total_size
-                task.progress = 100
-                task.status = TaskStatus.FINISHED
-                task.error_message = ""
-                return
-                
-            resume_header = {}
-            mode = 'wb'
-            if initial_size > 0:
-                resume_header = {'Range': f'bytes={initial_size}-'}
-                mode = 'ab'
-                
-            with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
-                if r.status_code not in (200, 206):
-                    task.status = TaskStatus.FAILED
-                    if r.status_code == 403:
-                        task.error_message = f"HTTP 403 (Forbidden): Cloudflare anti-bot blocked your connection. Try toggling your VPN or changing DNS (1.1.1.1)."
-                    else:
-                        task.error_message = f"Download request failed. Server returned HTTP {r.status_code}."
-                    if r.status_code in (403, 503):
-                        preview = r.text[:500] if hasattr(r, 'text') else "No text body"
-                        logging.error(f"Download 403/503 for {dl_url}. Body preview: {preview}")
-                    return
-                    
-                if r.status_code == 200 and initial_size > 0:
-                    mode = 'wb'
-                    initial_size = 0
-                    
-                task.downloaded_bytes = initial_size
-                if total_size == 0 and 'content-length' in r.headers:
-                    task.total_bytes = int(r.headers['content-length']) + initial_size
-                elif total_size == 0:
-                    task.total_bytes = 0
-                    
-                start_time = time.time()
-                last_time = start_time
-                bytes_since_last = 0
-                
-                with open(task.filepath, mode) as f:
-                    for chunk in r.iter_content(chunk_size=8192*8):
-                        if task.pause_flag:
-                            task.status = TaskStatus.PAUSED
-                            task.speed = 0
-                            return
-                        if task.cancel_flag:
-                            task.status = TaskStatus.CANCELLED
-                            task.speed = 0
-                            return
-                            
-                        if chunk:
-                            f.write(chunk)
-                            size = len(chunk)
-                            task.downloaded_bytes += size
-                            bytes_since_last += size
-                            
-                            with self.session_bytes_lock:
-                                self.session_downloaded_bytes += size
-                            
-                            now = time.time()
-                            if now - last_time > 0.5:
-                                task.speed = (bytes_since_last / (now - last_time)) / (1024*1024)
-                                if task.total_bytes > 0:
-                                    task.progress = (task.downloaded_bytes / task.total_bytes) * 100
-                                last_time = now
-                                bytes_since_last = 0
-                                
-                            self.rate_limiter.consume(size, self.settings.get("download_speed_limit", 0))
-                
-                task.progress = 100
-                task.speed = 0
-                task.status = TaskStatus.FINISHED
-                task.error_message = ""
-                self.trigger_history_save()
-                
-        except Exception as e:
-            logging.error(f"Download worker error for task {task.link}: {e}", exc_info=True)
-            if not task.cancel_flag and not task.pause_flag:
-                task.status = TaskStatus.FAILED
-                task.error_message = f"Download failed. {format_error_message(e)}"
-                self.trigger_history_save()
