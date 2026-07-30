@@ -51,6 +51,7 @@ def load_settings():
     default_settings = {
         "default_save_dir": default_downloads,
         "max_workers": 3,
+        "download_speed_limit": 0,
         "extract_after_download": False,
         "column_widths": {},
         "skip_delete_confirmation": False,
@@ -181,6 +182,13 @@ class SettingsDialog(QDialog):
         self.workers_spinbox.setRange(1, 10)
         self.workers_spinbox.setValue(self.current_settings.get("max_workers", 3))
         layout.addRow("Max Concurrent Downloads:", self.workers_spinbox)
+
+        # Speed Limit
+        self.speed_limit_spinbox = QSpinBox()
+        self.speed_limit_spinbox.setRange(0, 999999)
+        self.speed_limit_spinbox.setSuffix(" KB/s (0 = unlimited)")
+        self.speed_limit_spinbox.setValue(self.current_settings.get("download_speed_limit", 0))
+        layout.addRow("Speed Limit (per download):", self.speed_limit_spinbox)
         
         # Extract Option
         self.extract_checkbox = QCheckBox()
@@ -219,6 +227,7 @@ class SettingsDialog(QDialog):
             
             self.dir_input.setText(default_dir)
             self.workers_spinbox.setValue(3)
+            self.speed_limit_spinbox.setValue(0)
             self.extract_checkbox.setChecked(False)
             self.skip_delete_checkbox.setChecked(False)
             
@@ -230,6 +239,7 @@ class SettingsDialog(QDialog):
         return {
             "default_save_dir": self.dir_input.text(),
             "max_workers": self.workers_spinbox.value(),
+            "download_speed_limit": self.speed_limit_spinbox.value(),
             "extract_after_download": self.extract_checkbox.isChecked(),
             "skip_delete_confirmation": self.skip_delete_checkbox.isChecked(),
             "column_widths": self.current_settings.get("column_widths", {}),
@@ -1692,8 +1702,12 @@ class MainWindow(QMainWindow):
                 last_time = start_time
                 bytes_since_last = 0
                 
+                speed_limit_kb = self.settings.get("download_speed_limit", 0)
+                speed_limit_b = speed_limit_kb * 1024
+                
                 with open(task.filepath, mode) as f:
                     for chunk in r.iter_content(chunk_size=8192*8):
+                        chunk_start_time = time.time()
                         if task.pause_flag:
                             task.status = "Paused"
                             task.speed = 0
@@ -1716,6 +1730,12 @@ class MainWindow(QMainWindow):
                                     task.progress = (task.downloaded_bytes / task.total_bytes) * 100
                                 last_time = now
                                 bytes_since_last = 0
+                                
+                            if speed_limit_b > 0:
+                                expected_time = size / speed_limit_b
+                                elapsed_time = time.time() - chunk_start_time
+                                if elapsed_time < expected_time:
+                                    time.sleep(expected_time - elapsed_time)
                 
                 task.progress = 100
                 task.speed = 0

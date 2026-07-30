@@ -7,10 +7,11 @@ import sys
 import os
 
 class DownloadManager:
-    def __init__(self, links_file, max_workers=3, chunk_size=8*1024*1024):
+    def __init__(self, links_file, max_workers=3, chunk_size=8192*8, speed_limit_kb=0):
         self.links_file = links_file
         self.max_workers = max_workers
         self.chunk_size = chunk_size
+        self.speed_limit_kb = speed_limit_kb
         self.scraper = cloudscraper.create_scraper(browser='chrome')
         self.total_links = 0
         self.completed_links = 0
@@ -81,6 +82,8 @@ class DownloadManager:
                 resume_header = {'Range': f'bytes={initial_size}-'}
                 mode = 'ab'
 
+            speed_limit_b = self.speed_limit_kb * 1024
+
             with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
                 if r.status_code not in (200, 206):
                     with self.lock:
@@ -102,18 +105,26 @@ class DownloadManager:
                 
                 with open(filename, mode) as f:
                     for chunk in r.iter_content(chunk_size=self.chunk_size):
+                        chunk_start_time = time.time()
                         if chunk:
                             f.write(chunk)
-                            dl += len(chunk)
+                            size = len(chunk)
+                            dl += size
                             
                             now = time.time()
                             if now - last_print > 1: # update progress every 1s
-                                speed = (len(chunk)) / (now - last_print + 0.0001) / (1024*1024) if last_print > 0 else 0
+                                speed = (size) / (now - last_print + 0.0001) / (1024*1024) if last_print > 0 else 0
                                 percent = (dl / total_size) * 100 if total_size > 0 else 0
                                 with self.lock:
                                     sys.stdout.write(f"\r[{filename}] {percent:.1f}% | {dl/(1024*1024):.1f}/{total_size/(1024*1024):.1f} MB | {speed:.1f} MB/s{' ' * 20}")
                                     sys.stdout.flush()
                                 last_print = now
+                                
+                            if speed_limit_b > 0:
+                                expected_time = size / speed_limit_b
+                                elapsed_time = time.time() - chunk_start_time
+                                if elapsed_time < expected_time:
+                                    time.sleep(expected_time - elapsed_time)
                                 
                 with self.lock:
                     sys.stdout.write(f"\r[{filename}] 100% | Downloaded successfully{' ' * 30}\n")
