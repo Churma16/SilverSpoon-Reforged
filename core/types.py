@@ -17,6 +17,24 @@ class TaskStatus(str, Enum):
     def __str__(self):
         return self.value
 
+    @property
+    def color(self) -> str:
+        color_map = {
+            TaskStatus.STANDBY: "#95a5a6",
+            TaskStatus.IN_QUEUE: "#f39c12",
+            TaskStatus.CONNECTING: "#3498db",
+            TaskStatus.DOWNLOADING: "#2ecc71",
+            TaskStatus.PAUSING: "#f1c40f",
+            TaskStatus.PAUSED: "#f1c40f",
+            TaskStatus.CANCELLED: "#7f8c8d",
+            TaskStatus.FAILED: "#e74c3c",
+            TaskStatus.FINISHED: "#2ecc71",
+            TaskStatus.UNPACKING: "#9b59b6",
+            TaskStatus.EXTRACTED: "#8e44ad",
+            TaskStatus.EXTRACT_ERROR: "#c0392b",
+        }
+        return color_map.get(self, "#ffffff")
+
 class BatchStatus(str, Enum):
     STANDBY = "Standby"
     ACTIVE = "Active"
@@ -26,6 +44,17 @@ class BatchStatus(str, Enum):
 
     def __str__(self):
         return self.value
+
+    @property
+    def color(self) -> str:
+        color_map = {
+            BatchStatus.STANDBY: "#95a5a6",
+            BatchStatus.ACTIVE: "#3498db",
+            BatchStatus.HAS_FAILURES: "#e74c3c",
+            BatchStatus.EXTRACTING: "#9b59b6",
+            BatchStatus.COMPLETED: "#2ecc71",
+        }
+        return color_map.get(self, "#ffffff")
 
 STATUS_MIGRATION = {
     "Queued": TaskStatus.STANDBY,
