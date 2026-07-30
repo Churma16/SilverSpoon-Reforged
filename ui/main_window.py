@@ -28,7 +28,7 @@ from core.history import load_history, save_history
 from core.download_task import DownloadTask
 from core.types import TaskStatus, BatchStatus
 from core.extractors.fuckingfast import FuckingFastExtractor
-from ui.dialogs import WarningDialog, SettingsDialog
+from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog
 from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
 from utils.formatters import format_error_message
 
@@ -207,6 +207,10 @@ class MainWindow(QMainWindow):
         contributing_action = QAction("C&ontributing Guide", self)
         contributing_action.triggered.connect(self.show_contributing_dialog)
         help_menu.addAction(contributing_action)
+        
+        changelog_action = QAction("View &Changelog", self)
+        changelog_action.triggered.connect(self.show_changelog_dialog)
+        help_menu.addAction(changelog_action)
         
         help_menu.addSeparator()
         
@@ -592,32 +596,27 @@ class MainWindow(QMainWindow):
             "</ul>"
         )
 
+    def show_changelog_dialog(self):
+        dialog = ChangelogDialog(self.base_dir, self)
+        dialog.exec()
+
     def show_about_dialog(self):
-        QMessageBox.about(self, "About SilverSpoon Reforged",
-            "<h3>SilverSpoon Reforged v1.3.0</h3>"
-            "<p>A simple, fast bulk downloader for FuckingFast links developed by billysams21.</p>"
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("About SilverSpoon Reforged")
+        msg_box.setText(
+            f"<h3>SilverSpoon Reforged {CURRENT_VERSION}</h3>"
+            "<p>A simple, fast bulk downloader for FuckingFast links.</p>"
+            "<p>This is a forked version based on the original work by <b>billysams21</b>.</p>"
             "<p>Select your links, paste them in, and hit Add!</p>"
             "<p>Licensed under the GNU GPLv3.</p>"
-            "<hr>"
-            "<h4>Changelog (v1.3.0 - Short):</h4>"
-            "<ul>"
-            "<li><b>New:</b> Built-in auto-updater for Windows executables.</li>"
-            "<li><b>New:</b> VPN warning dialog to help with Cloudflare blocking.</li>"
-            "<li><b>New:</b> Default save directory smartly falls back to user Downloads folder.</li>"
-            "<li><b>New:</b> Reset Settings to Defaults button.</li>"
-            "<li><b>New:</b> Toggle pause/resume with the Spacebar.</li>"
-            "<li><b>Fix:</b> Better directory creation error handling during downloads.</li>"
-            "</ul>"
-            "<hr>"
-            "<h4>Changelog (v1.2.1 - Short):</h4>"
-            "<ul>"
-            "<li><b>New:</b> Right-click context menu and keyboard shortcuts.</li>"
-            "<li><b>New:</b> Force Redownload action.</li>"
-            "<li><b>New:</b> Hover error tooltips and 'Copy Error Details' log extraction.</li>"
-            "<li><b>New:</b> Extraction support for Linux and macOS.</li>"
-            "</ul>"
-            "<p><i>See CHANGELOG.md for full details.</i></p>"
         )
+        changelog_btn = msg_box.addButton("View Full Changelog", QMessageBox.ButtonRole.ActionRole)
+        msg_box.addButton(QMessageBox.StandardButton.Ok)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == changelog_btn:
+            self.show_changelog_dialog()
 
     def show_warning_dialog(self):
         dialog = WarningDialog(self.settings, self)
