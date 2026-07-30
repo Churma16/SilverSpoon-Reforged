@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.5.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.4.2...v1.5.0) (2026-07-30)
+
+### Features
+
+* **core:** add status color mapping property to TaskStatus and BatchStatus enums ([67f8be4](https://github.com/Churma16/SilverSpoon-Reforged/commit/67f8be4bea4e6d1d2864041fccf8a46883010d60))
+* **ui:** add ChangelogDialog to render CHANGELOG.md file dynamically ([d18ff36](https://github.com/Churma16/SilverSpoon-Reforged/commit/d18ff36d549cee54415c27b310c4b443d14a9ce6))
+* **ui:** add session stats widget and tree drag-and-drop reordering widget ([4edc7f1](https://github.com/Churma16/SilverSpoon-Reforged/commit/4edc7f1c48e107c33c4b9c6046cf460d995a05a1))
+* **ui:** integrate drag-drop task reordering and session statistics tracking in MainWindow ([506d468](https://github.com/Churma16/SilverSpoon-Reforged/commit/506d4680a429d05d96303b4814c4525cd27972fc))
+* **ui:** render dynamic status colors in tree items and collapse batch folders by default ([830e169](https://github.com/Churma16/SilverSpoon-Reforged/commit/830e1699f626ec77db195452dc1b1abda7117305))
 ## [1.4.2](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.4.1...v1.4.2) (2026-07-30)
 ## [1.4.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.4.0...v1.4.1) (2026-07-30)
 ## 1.4.0 (2026-07-30)
