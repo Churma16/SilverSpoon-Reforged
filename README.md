@@ -1,4 +1,6 @@
-# SilverSpoon (previously FitGirlDownloader)
+# SilverSpoon Reforged (previously FitGirlDownloader)
+
+> **Acknowledgments:** This project is a heavily refactored and enhanced fork of the original [SilverSpoon](https://github.com/billysams21/SilverSpoon) by [billysams21](https://github.com/billysams21).
 
 > **Note:** Currently, this tool ONLY supports `fuckingfast.co` links (often used by FitGirl Repacks). Support for other hosts may be added in the future.
 

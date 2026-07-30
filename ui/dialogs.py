@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt
 class WarningDialog(QDialog):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Welcome to SilverSpoon!")
+        self.setWindowTitle("Welcome to SilverSpoon Reforged!")
         self.setMinimumWidth(500)
         self.settings = settings
         

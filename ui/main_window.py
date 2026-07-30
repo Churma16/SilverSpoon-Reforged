@@ -34,7 +34,7 @@ from utils.formatters import format_error_message
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SilverSpoon - UI (PyQt6)")
+        self.setWindowTitle("SilverSpoon Reforged - UI (PyQt6)")
         self.resize(1000, 650)
         
         # Determine paths to assets (works both locally and within a PyInstaller bundled .exe)
@@ -88,7 +88,7 @@ class MainWindow(QMainWindow):
         
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setIcon(icon)
-        self.tray_icon.setToolTip("SilverSpoon Bulk Downloader")
+        self.tray_icon.setToolTip("SilverSpoon Reforged Bulk Downloader")
         
         tray_menu = QMenu(self)
         show_action = QAction("Show / Hide Window", self)
@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
 
         about_menu = menu_bar.addMenu("&About")
         
-        about_action = QAction("&About SilverSpoon", self)
+        about_action = QAction("&About SilverSpoon Reforged", self)
         about_action.triggered.connect(self.show_about_dialog)
         about_menu.addAction(about_action)
         
@@ -543,8 +543,8 @@ class MainWindow(QMainWindow):
         )
 
     def show_about_dialog(self):
-        QMessageBox.about(self, "About SilverSpoon",
-            "<h3>SilverSpoon v1.3.0</h3>"
+        QMessageBox.about(self, "About SilverSpoon Reforged",
+            "<h3>SilverSpoon Reforged v1.3.0</h3>"
             "<p>A simple, fast bulk downloader for FuckingFast links developed by billysams21.</p>"
             "<p>Select your links, paste them in, and hit Add!</p>"
             "<p>Licensed under the GNU GPLv3.</p>"
