@@ -8,6 +8,7 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 
 ## Features
 
+* **Auto Web Scraper:** Don't want to copy links manually? Paste a website URL (like a FitGirl repacks page) and SilverSpoon will automatically scan the raw HTML and extract all `fuckingfast.co` links for you!
 * **Global Rate Limiting & Throttling:** Features a powerful thread-safe token bucket rate limiter to cap your global download speeds without stalling active connections.
 * **Real-Time Speed Graph:** Includes a custom-painted `SpeedGraphWidget` rendering your historical network bandwidth curves with smooth gradients and peak tracking.
 * **System Tray & Notifications:** Keep SilverSpoon running in the background with a system tray icon and receive desktop notifications when your batches finish downloading or extracting.
