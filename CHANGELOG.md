@@ -2,6 +2,7 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.7.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.7.0...v1.7.1) (2026-07-31)
 ## [1.7.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.6.0...v1.7.0) (2026-07-30)
 
 ### Features
