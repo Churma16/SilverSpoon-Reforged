@@ -47,8 +47,8 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/billysams21/SilverSpoon.git
-   cd SilverSpoon
+   git clone https://github.com/Churma16/SilverSpoon-Reforged.git 
+   cd SilverSpoon-Reforged
    ```
 2. Install the required Python packages (or do it inside virtual environment):
    ```bash
