@@ -1,7 +1,7 @@
 # SilverSpoon Reforged - Codebase Index & Architecture Overview
 
 ## 1. What is this project?
-SilverSpoon Reforged (formerly SilverSpoon/FitGirlDownloader) is a Python-based bulk downloader application designed to bypass Cloudflare anti-bot protections on file-hosting services (primarily `fuckingfast.co`). 
+SilverSpoon Reforged is a Python-based bulk downloader application designed for link extraction and multi-threaded stream downloads from supported file-hosting services. 
 
 *This project is a heavily refactored and enhanced fork of the original [SilverSpoon](https://github.com/billysams21/SilverSpoon) project created by billysams21.*
 
