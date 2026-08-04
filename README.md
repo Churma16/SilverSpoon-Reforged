@@ -10,24 +10,24 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 
 ### Fork-Exclusive Features & Improvements
 
-* **SeleniumBase UC & Auto Turnstile Solver:** Integrated browser session automation using SeleniumBase Undetected ChromeDriver running in headless mode with automated Turnstile token solving and in-browser asynchronous link fetching.
+* **SeleniumBase UC & Auto Turnstile Solver:** Integrated background browser automation to handle host verification and retrieve direct download links automatically.
 * **Live Worker & Settings Sync:** Dynamic updating of max concurrent download workers and settings without needing to restart active tasks.
 * **Smart Auto-Scaling Progress Units:** Progress metrics and file size columns automatically auto-scale between KB, MB, and GB for both individual files and batch totals.
 * **Refined Task Lifecycle & Statuses:** Cleaner status transitions (`Solving Session...`, `Connecting...`, `Downloading`) and robust logger integration across core modules.
 * **Auto Web Link Extractor:** Don't want to copy links manually? Paste a web page URL and SilverSpoon will automatically scan the raw HTML and extract supported host links for you!
-* **Global Rate Limiting & Throttling:** Features a powerful thread-safe token bucket rate limiter to cap your global download speeds without stalling active connections.
-* **Real-Time Bandwidth Graph:** Includes a custom-painted `SpeedGraphWidget` rendering historical network bandwidth curves with smooth gradients and peak tracking.
-* **Session Metrics & Stats Bar:** Live `SessionStatsWidget` tracking total downloaded bytes, active downloads, completed tasks, and error counts.
-* **Interactive Drag-and-Drop Reordering:** Custom `ReorderableTreeWidget` allowing interactive drag-and-drop reordering of tasks and batch folders.
+* **Global Rate Limiting & Throttling:** Features a speed-limiting utility to cap global download speeds and prevent network congestion.
+* **Real-Time Bandwidth Graph:** Displays a real-time download speed graph showing bandwidth history and peak speeds.
+* **Session Metrics & Stats Bar:** Shows real-time session statistics tracking total download size, active tasks, and completions.
+* **Interactive Drag-and-Drop Reordering:** Allows drag-and-drop reordering of download tasks and batch folders.
 * **System Tray & Desktop Notifications:** Keep SilverSpoon running in the background with system tray integration and desktop notifications when downloads or extractions complete.
-* **In-App Changelog Viewer:** Built-in markdown viewer dialog (`ChangelogDialog`) to inspect release notes directly from the GUI.
+* **In-App Changelog Viewer:** Built-in viewer to inspect update release notes directly inside the application.
 * **Auto-Shutdown on Completion:** Option to automatically shut down or put the computer to sleep when all queue downloads finish.
 
 ### Base Original Features
 
 * **Auto-Updater:** (Windows only) Automatically checks for, downloads, and applies new updates so you are always on the latest version without manual `.zip` downloads.
 * **Cross-Platform Auto-Extraction:** Built-in auto-extraction support for Windows (via 7-Zip engine), as well as Linux and macOS (via `/usr/bin/7z` / `p7zip`).
-* **Automated Session Management:** Uses `cloudscraper` and browser engines to manage network challenges and resolve direct download links.
+* **Automated Session Management:** Uses background session management to resolve direct download links smoothly.
 * **Persistent Session History:** Automatically saves your task queue, progress, and folder groupings across sessions. Close the app anytime without losing your place!
 * **Grouped Batch Folders:** Downloads are neatly organized into collapsible dropdown trees, showing aggregated progress, speed, and ETA for entire batches.
 * **Smart Folder Grouping & Batching:** Automatically suggests a unified folder name for a batch of links, grouping related part files together.
@@ -37,7 +37,7 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 * **Customizable UI & Shortcuts:** Interactive, resizable columns that save their state, plus right-click context menus and handy keyboard shortcuts (e.g., `Space` to pause/resume, `Delete` to remove tasks).
 * **File Management:** Safely delete tasks and optionally remove their associated physical files from your disk, or use "Force Redownload" to wipe and restart a corrupted file.
 * **Error Diagnostics:** Hover over failed tasks for detailed tooltips, and easily copy error logs for quick troubleshooting.
-* **Direct Link Extractor:** Automatically simulates internal HTMX POST requests and parses raw HTML to fetch direct links.
+* **Direct Link Extractor:** Automatically retrieves direct download links from supported hosters in the background.
 * **Multi-threading:** Downloads multiple parts concurrently (default 3 workers, customizable in Settings) to maximize bandwidth.
 * **Pause, Resume & Retry:** Safely pause your downloads, recover from network drops, or quickly retry errored links using HTTP `Range` headers.
 * **PyQt6 GUI & Headless CLI:** Clean graphical UI built with PyQt6 along with a lightweight CLI script (`downloader.py`) for headless automation.
@@ -55,8 +55,8 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/billysams21/SilverSpoon.git
-   cd SilverSpoon
+   git clone https://github.com/Churma16/SilverSpoon-Reforged.git
+   cd SilverSpoon-Reforged
    ```
 2. Install the required Python packages (or do it inside virtual environment):
    ```bash
@@ -96,7 +96,7 @@ If you prefer the command line:
 ## Project Structure
 
 * `core/` - Core download management, thread-safe rate limiting, session history, and auto-extraction logic.
-  * `core/extractors/` - Provider-specific link scrapers.
+  * `core/extractors/` - Provider-specific link extractors.
 * `ui/` - PyQt6 user interface components, main window, dialogs, and custom widgets (e.g., speed graph).
 * `utils/` - Helper functions for byte size formatting, unit conversions, and text utilities.
 * `assets/` - Documentation screenshots and icon resources.
@@ -105,7 +105,7 @@ If you prefer the command line:
 
 ## Contributing
 
-We welcome contributions! If you'd like to help improve SilverSpoon, please see our [Contributing Guide](CONTRIBUTING.md) for instructions on how to set up your environment, follow our branching strategy (`dev` branch), and submit Pull Requests.
+We welcome contributions! If you'd like to help improve SilverSpoon Reforged, please see our [Contributing Guide](CONTRIBUTING.md) for instructions on how to set up your environment, follow our branching strategy (`dev` branch), and submit Pull Requests.
 
 
 ## Changelog
