@@ -2,3 +2,4 @@ cloudscraper>=1.2.71
 curl_cffi>=0.7.0
 seleniumbase>=4.51.0
 PyQt6>=6.11.0
+qtawesome>=1.4.0

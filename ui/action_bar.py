@@ -1,4 +1,5 @@
 import os
+import qtawesome as qta
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QPushButton, QCheckBox
 )
@@ -60,43 +61,54 @@ class ActionBarWidget(QWidget):
     def setup_ui(self):
         action_layout = QHBoxLayout(self)
         action_layout.setContentsMargins(0, 0, 0, 0)
-        
+
+        icon_color = "#ffffff"
+        icon_size = 14
+
         self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn.setIcon(qta.icon("fa5s.check-double", color=icon_color, scale_factor=icon_size / 16))
         self.select_all_btn.setStyleSheet(self._make_action_button_style("default"))
         self.select_all_btn.clicked.connect(self.select_all_clicked.emit)
         action_layout.addWidget(self.select_all_btn)
         
         self.start_btn = QPushButton("Start / Resume")
+        self.start_btn.setIcon(qta.icon("fa5s.play", color=icon_color, scale_factor=icon_size / 16))
         self.start_btn.setStyleSheet(self._make_action_button_style("primary"))
         self.start_btn.clicked.connect(self.start_clicked.emit)
         action_layout.addWidget(self.start_btn)
         
         self.pause_btn = QPushButton("Pause")
-        self.pause_btn.setStyleSheet(self._make_action_button_style("warning"))
+        self.pause_btn.setIcon(qta.icon("fa5s.pause", color=icon_color, scale_factor=icon_size / 16))
+        self.pause_btn.setStyleSheet(self._make_action_button_style("neutral"))
         self.pause_btn.clicked.connect(self.pause_clicked.emit)
         action_layout.addWidget(self.pause_btn)
         
         self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setIcon(qta.icon("fa5s.stop", color=icon_color, scale_factor=icon_size / 16))
         self.cancel_btn.setStyleSheet(self._make_action_button_style("danger"))
         self.cancel_btn.clicked.connect(self.cancel_clicked.emit)
         action_layout.addWidget(self.cancel_btn)
         
         self.retry_btn = QPushButton("Retry")
-        self.retry_btn.setStyleSheet(self._make_action_button_style("accent"))
+        self.retry_btn.setIcon(qta.icon("fa5s.redo", color=icon_color, scale_factor=icon_size / 16))
+        self.retry_btn.setStyleSheet(self._make_action_button_style("warning"))
         self.retry_btn.clicked.connect(self.retry_clicked.emit)
         action_layout.addWidget(self.retry_btn)
 
         self.force_redownload_btn = QPushButton("Force Redownload")
-        self.force_redownload_btn.setStyleSheet(self._make_action_button_style("destructive"))
+        self.force_redownload_btn.setIcon(qta.icon("fa5s.download", color=icon_color, scale_factor=icon_size / 16))
+        self.force_redownload_btn.setStyleSheet(self._make_action_button_style("warning"))
         self.force_redownload_btn.clicked.connect(self.force_redownload_clicked.emit)
         action_layout.addWidget(self.force_redownload_btn)
 
         self.copy_log_btn = QPushButton("Copy Error Details")
+        self.copy_log_btn.setIcon(qta.icon("fa5s.copy", color=icon_color, scale_factor=icon_size / 16))
         self.copy_log_btn.setStyleSheet(self._make_action_button_style("neutral"))
         self.copy_log_btn.clicked.connect(self.copy_log_clicked.emit)
         action_layout.addWidget(self.copy_log_btn)
         
         self.delete_btn = QPushButton("Delete")
+        self.delete_btn.setIcon(qta.icon("fa5s.trash-alt", color=icon_color, scale_factor=icon_size / 16))
         self.delete_btn.setStyleSheet(self._make_action_button_style("danger"))
         self.delete_btn.clicked.connect(self.delete_clicked.emit)
         action_layout.addWidget(self.delete_btn)
@@ -114,6 +126,7 @@ class ActionBarWidget(QWidget):
         action_layout.addWidget(self.shutdown_checkbox)
         
         self.clear_btn = QPushButton("Clear Completed")
+        self.clear_btn.setIcon(qta.icon("fa5s.broom", color=icon_color, scale_factor=icon_size / 16))
         self.clear_btn.setStyleSheet(self._make_action_button_style("default"))
         self.clear_btn.clicked.connect(self.clear_completed_clicked.emit)
         action_layout.addWidget(self.clear_btn)
