@@ -9,9 +9,11 @@
 link.txt
 
 # Temporary / Debug files
-test_cf*.py
+test_*.py
 page.html
 ui_downloader.py
+*.log
+downloaded_files/
 
 # Python
 __pycache__/
@@ -27,5 +29,8 @@ Thumbs.db
 .DS_Store
 /build
 /dist
-FitGirlDownloader.spec
 SilverSpoon.spec
+
+# Bundled Binaries
+7z.exe
+7z.dll
