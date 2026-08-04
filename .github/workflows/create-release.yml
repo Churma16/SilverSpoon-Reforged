@@ -27,7 +27,7 @@ jobs:
 
       - name: Build Executable
         run: |
-          pyinstaller --clean --noconsole --onefile --icon="SilverSpoon.ico" --add-binary "7z.exe;." --add-binary "7z.dll;." --add-data "SilverSpoon.ico;." --add-data "SilverSpoon.png;." --name "SilverSpoon" pyqt_downloader.py
+          pyinstaller --clean SilverSpoon.spec
 
       - name: Create Zip Archive
         shell: powershell

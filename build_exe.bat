@@ -3,7 +3,7 @@ echo Building SilverSpoon executable...
 echo This might take a minute or two.
 echo.
 
-C:\Python313\Scripts\pyinstaller.exe --clean --noconsole --onefile --icon="SilverSpoon.ico" --add-binary "7z.exe;." --add-binary "7z.dll;." --add-data "SilverSpoon.ico;." --add-data "SilverSpoon.png;." --add-data "VERSION;." --name "SilverSpoon" pyqt_downloader.py
+pyinstaller --clean SilverSpoon.spec
 
 echo.
 echo Build complete! You can find the executable in the 'dist' folder.
