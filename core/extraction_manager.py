@@ -80,16 +80,16 @@ class ExtractionManager:
                 if hasattr(sys, '_MEIPASS'):
                     bundled_7z = os.path.join(sys._MEIPASS, '7z.exe')
                 
-                if os.path.exists(installed_7z):
+                if bundled_7z and os.path.exists(bundled_7z):
+                    cmd = [bundled_7z, 'x', first_vol, f'-o{save_dir}', '-y']
+                elif os.path.exists(installed_7z):
                     cmd = [installed_7z, 'x', first_vol, f'-o{save_dir}', '-y']
                 elif os.path.exists(installed_7z_x86):
                     cmd = [installed_7z_x86, 'x', first_vol, f'-o{save_dir}', '-y']
+                elif shutil.which('7z'):
+                    cmd = [os.path.abspath(shutil.which('7z')), 'x', first_vol, f'-o{save_dir}', '-y']
                 elif os.path.exists(installed_winrar):
                     cmd = [installed_winrar, 'x', '-y', first_vol, f'{save_dir}\\']
-                elif bundled_7z and os.path.exists(bundled_7z):
-                    cmd = [bundled_7z, 'x', first_vol, f'-o{save_dir}', '-y']
-                elif shutil.which('7z'):
-                    cmd = [shutil.which('7z'), 'x', first_vol, f'-o{save_dir}', '-y']
             else:
                 if shutil.which('7z'):
                     cmd = ['7z', 'x', first_vol, f'-o{save_dir}', '-y']
@@ -105,6 +105,7 @@ class ExtractionManager:
                 return
                 
             creationflags = 0x08000000 if sys.platform == 'win32' else 0
+            logging.info(f"Executing extraction command: {cmd}")
             subprocess.run(
                 cmd,
                 check=True,

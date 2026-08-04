@@ -52,7 +52,7 @@ class UrlInputBarWidget(QWidget):
         # Row 3: Text Input Area
         self.text_links = QTextEdit()
         self.text_links.setPlaceholderText(
-            "Paste game links (e.g., https://fitgirl-repacks.site/kingdom-come-deliverance-2/) or fuckingfast.co links / HTML page source here..."
+            "Paste page URLs, direct file-host links, or raw HTML code here..."
         )
         self.text_links.setMaximumHeight(80)
         main_layout.addWidget(self.text_links)
