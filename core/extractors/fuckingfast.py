@@ -3,6 +3,8 @@ import logging
 import threading
 from core.extractors.base import BaseExtractor
 
+logger = logging.getLogger(__name__)
+
 # JS snippet to read the Turnstile token auto-solved by the SeleniumBase UC driver
 _GET_TURNSTILE_TOKEN_JS = """
 var inp = document.querySelector('[name="cf-turnstile-response"]');
@@ -48,6 +50,7 @@ class FuckingFastExtractor(BaseExtractor):
         for attempt in range(max_retries):
             driver = None
             try:
+                logger.info(f"Starting SeleniumBase UC driver for {link} (attempt {attempt + 1}/{max_retries})")
                 driver = Driver(uc=True, headless=True)
                 driver.set_page_load_timeout(45)
                 driver.set_script_timeout(20)
@@ -65,9 +68,11 @@ class FuckingFastExtractor(BaseExtractor):
 
                 if not turnstile_token:
                     if attempt < max_retries - 1:
-                        logging.warning(f"Turnstile timeout on attempt {attempt + 1} for {link}. Retrying...")
+                        logger.warning(f"Turnstile timeout on attempt {attempt + 1} for {link}. Retrying...")
                         continue
                     return None, "Timed out waiting for Cloudflare Turnstile to solve."
+
+                logger.info(f"Turnstile token acquired for {link}")
 
                 # Execute the POST from inside the browser (full session context, correct Origin)
                 post_path = f"/f/{file_id}/go"
@@ -101,22 +106,26 @@ class FuckingFastExtractor(BaseExtractor):
                 result = driver.execute_async_script(fetch_js, turnstile_token, post_path)
 
                 if result.get('error'):
+                    logger.error(f"In-browser fetch error for {link}: {result['error']}")
                     return None, f"In-browser fetch error: {result['error']}"
 
                 if result.get('redirectUrl'):
+                    logger.info(f"Successfully extracted direct URL for {link}")
                     return result['redirectUrl'], None
 
                 status = result.get('status')
                 body = result.get('body', '')
                 if status == 200:
+                    logger.warning(f"File host returned HTTP 200 without redirect for {link}")
                     return None, "The file host did not return a direct download link. The link may be expired or unavailable."
                 else:
+                    logger.warning(f"File host returned HTTP {status} for {link}. Body: {body}")
                     return None, f"Could not request the direct download link. Server returned HTTP {status}. Body: {body}"
 
             except Exception as e:
-                logging.error(f"FuckingFastExtractor error for {link}: {e}", exc_info=True)
+                logger.error(f"FuckingFastExtractor error for {link}: {e}", exc_info=True)
                 if attempt < max_retries - 1:
-                    logging.warning(f"Exception on attempt {attempt + 1} for {link}. Retrying...")
+                    logger.warning(f"Exception on attempt {attempt + 1} for {link}. Retrying...")
                     time.sleep(2)
                     continue
                 return None, str(e)
