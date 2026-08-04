@@ -99,7 +99,7 @@ All notable changes to this project will be documented in this file.
 * **Top Menu Bar**: Added a new top menu bar for easier navigation and quick access to tools.
 * **Persistent Settings**: Added a Settings page (`File -> Settings`) with persistent configurations for your Base Save Directory, Max Concurrent Downloads, and Auto-extract preference.
 * **Import Links**: You can now import links directly from `.txt` files via the File menu.
-* **Batch Folder Prompt**: Automatically groups main game parts and optional files into the exact same folder when adding links, keeping your downloads perfectly organized.
+* **Batch Folder Prompt**: Automatically groups multi-part archives and optional files into the exact same folder when adding links, keeping your downloads perfectly organized.
 * **Help Menu**: Added a Help menu containing quick links to the GitHub Repository, Contact Us (Issues), a Contributing Guide, and an About page.
 
 ### Changes

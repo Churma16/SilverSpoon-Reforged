@@ -10,14 +10,14 @@
 ---
 
 ## 1. Incident Summary
-Downloads from `fuckingfast.co` experienced widespread failures returning HTTP `403 Forbidden` status due to Cloudflare Turnstile security challenges that standard HTTP request libraries (`curl_cffi`) could not solve. Following an initial migration to headless SeleniumBase UC (Undetected-Chromedriver), a secondary issue emerged where batch multipart downloads froze (*hung*) starting from the second file onward (`part02.rar`, `part03.rar`, etc.), leaving task statuses stuck on `Bypassing CF...` indefinitely.
+Downloads from `fuckingfast.co` experienced widespread failures returning HTTP `403 Forbidden` status due to Cloudflare Turnstile security challenges that standard HTTP request libraries (`curl_cffi`) could not solve. Following an initial migration to headless SeleniumBase UC (Undetected-Chromedriver), a secondary issue emerged where batch multipart downloads froze (*hung*) starting from the second file onward (`part02.rar`, `part03.rar`, etc.), leaving task statuses stuck on `Solving Session...` indefinitely.
 
 ---
 
 ## 2. Impact
-- **Impacted Users:** All users attempting to download multipart game/repack files from `fuckingfast.co`.
+- **Impacted Users:** All users attempting to download multipart archive files from `fuckingfast.co`.
 - **Impacted Data:** All multipart download batches (`.part01.rar`, `.part02.rar`, etc.) failed to auto-continue.
-- **Functionality:** Downloads stopped completely after the first file finished; users lacked clear visual feedback regarding background Cloudflare bypass status.
+- **Functionality:** Downloads stopped completely after the first file finished; users lacked clear visual feedback regarding background Cloudflare session solver status.
 
 ---
 
@@ -28,7 +28,7 @@ Downloads from `fuckingfast.co` experienced widespread failures returning HTTP `
 | 10:15 | Investigation confirmed `curl_cffi` cannot solve JavaScript Turnstile challenges without a browser context. |
 | 10:25 | Initial implementation of SeleniumBase UC with a single shared persistent driver instance across threads. |
 | 10:30 | User reported part 01 succeeded, but subsequent parts (`part02`) hung and failed to start. |
-| 10:35 | Added UI *Elapsed Time* column and explicit *Bypassing CF...* status indicator for real-time visibility. |
+| 10:35 | Added UI *Elapsed Time* column and explicit *Solving Session...* status indicator for real-time visibility. |
 | 10:41 | Refactored extractor architecture to use *ephemeral drivers* (fresh driver per file + mandatory cleanup in `finally`). |
 | 10:43 | Implemented structured application logging (`logging.INFO`) and an in-app *View Debug Logs* dialog under Help menu. |
 | 10:45 | Final verification succeeded; all batch downloads processed sequentially without hanging. |
@@ -55,7 +55,7 @@ Downloads from `fuckingfast.co` experienced widespread failures returning HTTP `
    - Enforced strict timeouts: `set_page_load_timeout(45)` and `set_script_timeout(20)`.
    - Guaranteed driver destruction via `finally: driver.quit()`.
 2. **Queue Management & UI Status:**
-   - Added `TaskStatus.BYPASSING_CF` ("Bypassing CF...") status with an orange visual indicator.
+   - Added `TaskStatus.SOLVING_SESSION` ("Solving Session...") status with an orange visual indicator.
    - Added an **Elapsed Time** column to the main table and batch folder headers.
 3. **Debugging Log Viewer:**
    - Configured logging to `logging.INFO` level with dual output to `~/.silverspoon.log` and `sys.stdout`.
@@ -69,4 +69,4 @@ Downloads from `fuckingfast.co` experienced widespread failures returning HTTP `
   - [x] Deliver GUI updates with Elapsed Time column and View Debug Logs dialog.
 - **Lessons Learned:**
   - Isolating browser state (one short-lived ephemeral driver per task) is drastically more reliable and resilient against modern anti-bot protection than maintaining persistent sessions that are prone to fingerprinting or deadlock.
-  - Granular UI feedback (e.g. *Bypassing CF...* and *Elapsed Time*) is essential for user trust when dealing with non-instant background extractions.
+  - Granular UI feedback (e.g. *Solving Session...* and *Elapsed Time*) is essential for user trust when dealing with non-instant background extractions.

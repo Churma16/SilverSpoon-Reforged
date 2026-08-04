@@ -10,7 +10,11 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 
 ### Fork-Exclusive Features & Improvements
 
-* **Auto Web Scraper:** Don't want to copy links manually? Paste a web page URL and SilverSpoon will automatically scan the raw HTML and extract supported host links for you!
+* **SeleniumBase UC & Auto Turnstile Solver:** Integrated browser session automation using SeleniumBase Undetected ChromeDriver running in headless mode with automated Turnstile token solving and in-browser asynchronous link fetching.
+* **Live Worker & Settings Sync:** Dynamic updating of max concurrent download workers and settings without needing to restart active tasks.
+* **Smart Auto-Scaling Progress Units:** Progress metrics and file size columns automatically auto-scale between KB, MB, and GB for both individual files and batch totals.
+* **Refined Task Lifecycle & Statuses:** Cleaner status transitions (`Solving Session...`, `Connecting...`, `Downloading`) and robust logger integration across core modules.
+* **Auto Web Link Extractor:** Don't want to copy links manually? Paste a web page URL and SilverSpoon will automatically scan the raw HTML and extract supported host links for you!
 * **Global Rate Limiting & Throttling:** Features a powerful thread-safe token bucket rate limiter to cap your global download speeds without stalling active connections.
 * **Real-Time Bandwidth Graph:** Includes a custom-painted `SpeedGraphWidget` rendering historical network bandwidth curves with smooth gradients and peak tracking.
 * **Session Metrics & Stats Bar:** Live `SessionStatsWidget` tracking total downloaded bytes, active downloads, completed tasks, and error counts.
@@ -33,7 +37,7 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 * **Customizable UI & Shortcuts:** Interactive, resizable columns that save their state, plus right-click context menus and handy keyboard shortcuts (e.g., `Space` to pause/resume, `Delete` to remove tasks).
 * **File Management:** Safely delete tasks and optionally remove their associated physical files from your disk, or use "Force Redownload" to wipe and restart a corrupted file.
 * **Error Diagnostics:** Hover over failed tasks for detailed tooltips, and easily copy error logs for quick troubleshooting.
-* **Direct Link Scraper:** Automatically simulates internal HTMX POST requests and scrapes raw HTML to fetch direct links.
+* **Direct Link Extractor:** Automatically simulates internal HTMX POST requests and parses raw HTML to fetch direct links.
 * **Multi-threading:** Downloads multiple parts concurrently (default 3 workers, customizable in Settings) to maximize bandwidth.
 * **Pause, Resume & Retry:** Safely pause your downloads, recover from network drops, or quickly retry errored links using HTTP `Range` headers.
 * **PyQt6 GUI & Headless CLI:** Clean graphical UI built with PyQt6 along with a lightweight CLI script (`downloader.py`) for headless automation.
@@ -42,7 +46,7 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 
 * **Language**: Python 3.10+ (Verified on Python 3.13)
 * **GUI Framework**: PyQt6 (`>= 6.11.0`)
-* **Scraper**: cloudscraper (`>= 1.2.71`)
+* **Session & Browser Automation**: `seleniumbase` (UC Mode) & `cloudscraper` (`>= 1.2.71`)
 * **Extraction Engine**: 7-Zip engine (`7z.exe`/`7z.dll` on Windows, `/usr/bin/7z` on Unix)
 * **Build Tool**: PyInstaller (for standalone `.exe` executable builds)
 * **Verified Environment (This Fork)**: Windows 11 (tested and fully functional on host machine)
