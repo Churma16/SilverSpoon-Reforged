@@ -4,6 +4,7 @@ class TaskStatus(str, Enum):
     STANDBY = "Standby"
     IN_QUEUE = "In Queue"
     CONNECTING = "Connecting..."
+    BYPASSING_CF = "Bypassing CF..."
     DOWNLOADING = "Downloading"
     PAUSING = "Pausing..."
     PAUSED = "Paused"
@@ -23,6 +24,7 @@ class TaskStatus(str, Enum):
             TaskStatus.STANDBY: "#95a5a6",
             TaskStatus.IN_QUEUE: "#f39c12",
             TaskStatus.CONNECTING: "#3498db",
+            TaskStatus.BYPASSING_CF: "#e67e22",
             TaskStatus.DOWNLOADING: "#2ecc71",
             TaskStatus.PAUSING: "#f1c40f",
             TaskStatus.PAUSED: "#f1c40f",
