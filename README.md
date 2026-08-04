@@ -1,4 +1,4 @@
-# SilverSpoon Reforged (previously FitGirlDownloader)
+# SilverSpoon Reforged
 
 > **Acknowledgments:** This project is a heavily refactored and enhanced fork of the original [SilverSpoon](https://github.com/billysams21/SilverSpoon) by [billysams21](https://github.com/billysams21).
 
@@ -38,10 +38,14 @@ A Python-based bulk downloader designed to bypass Cloudflare protections on file
 * **Pause, Resume & Retry:** Safely pause your downloads, recover from network drops, or quickly retry errored links using HTTP `Range` headers.
 * **PyQt6 GUI & Headless CLI:** Clean graphical UI built with PyQt6 along with a lightweight CLI script (`downloader.py`) for headless automation.
 
-## Requirements
+## Requirements & Tech Stack
 
-* Python 3.10+
-* Dependencies listed in `requirements.txt`
+* **Language**: Python 3.10+ (Verified on Python 3.13)
+* **GUI Framework**: PyQt6 (`>= 6.11.0`)
+* **Scraper**: cloudscraper (`>= 1.2.71`)
+* **Extraction Engine**: Bundled 7-Zip binaries (`7z.exe`/`7z.dll` on Windows, `/usr/bin/7z` on Unix)
+* **Build Tool**: PyInstaller (for standalone `.exe` executable builds)
+* **Verified Environment (This Fork)**: Windows 11 (tested and fully functional on host machine)
 
 ## Installation
 
