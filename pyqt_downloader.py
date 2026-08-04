@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QPixmap
@@ -10,15 +11,28 @@ from PyQt6.QtCore import Qt, QTimer
 from ui.main_window import MainWindow
 from core.settings import OLD_EXE_CLEANUP_MARKER_SUFFIX
 
+is_debug_mode = any(arg.lower() in ("-debug", "--debug") for arg in sys.argv)
+
 log_file = os.path.expanduser("~/.silverspoon.log")
+handlers = [
+    RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8')
+]
+
+if is_debug_mode:
+    handlers.append(logging.StreamHandler(sys.stdout))
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file, encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    level=logging.DEBUG if is_debug_mode else logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=handlers
 )
+
+# Mute noisy 3rd-party loggers unless in debug mode
+if not is_debug_mode:
+    for noisy_logger_name in ("selenium", "filelock", "urllib3", "uc", "WDM"):
+        logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
+
+logger = logging.getLogger("pyqt_downloader")
 
 def main():
     # Perform cleanup of old exe if marker file exists
@@ -36,8 +50,9 @@ def main():
                         except Exception:
                             time.sleep(1)
                 os.remove(marker_file)
-            except Exception:
-                pass
+                logger.info(f"Cleaned up old executable: {old_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup old executable: {cleanup_error}")
 
     app = QApplication(sys.argv)
     
@@ -64,7 +79,11 @@ def main():
     QTimer.singleShot(1000, splash.close)
     QTimer.singleShot(1000, window.show)
     
-    sys.exit(app.exec())
+    app.aboutToQuit.connect(logging.shutdown)
+    
+    exit_code = app.exec()
+    logging.shutdown()
+    sys.exit(exit_code)
 
 if __name__ == "__main__":
     main()

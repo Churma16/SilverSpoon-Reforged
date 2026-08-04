@@ -19,3 +19,23 @@ def format_error_message(error, max_length=160):
     if len(text) > max_length:
         text = text[:max_length].rstrip() + "..."
     return f"{error_type}: {text}"
+
+
+def format_bytes(size_bytes: float) -> str:
+    """Format raw byte counts into human-readable strings (KB, MB, GB)."""
+    if size_bytes <= 0:
+        return "0 MB"
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+def format_size_progress(downloaded_bytes: float, total_bytes: float) -> str:
+    """Format downloaded vs total byte progress in matching units."""
+    if total_bytes <= 0:
+        return "-"
+    return f"{format_bytes(downloaded_bytes)} / {format_bytes(total_bytes)}"
+

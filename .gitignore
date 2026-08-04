@@ -34,3 +34,4 @@ SilverSpoon.spec
 # Bundled Binaries
 7z.exe
 7z.dll
+/.agents/rules
