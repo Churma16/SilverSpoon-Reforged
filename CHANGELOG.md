@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.0.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.0.0...v2.0.1) (2026-08-04)
+## [2.0.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.7.1...v2.0.0) (2026-08-04)
+
+### ⚠ BREAKING CHANGES
+
+* **core:** upgrade core engine to SeleniumBase UC and refactor architecture to 2.0
+
+### Features
+
+* **core:** enhance module logging and dynamic token bucket rate limiting capacity ([6ce45c4](https://github.com/Churma16/SilverSpoon-Reforged/commit/6ce45c47e89ee227ce86c1a5858d16935d16c1ad))
+* **core:** upgrade core engine to SeleniumBase UC and refactor architecture to 2.0 ([416abd0](https://github.com/Churma16/SilverSpoon-Reforged/commit/416abd077442a35a1b7e92b9606eed5ab1c4a5e0))
+* **logging:** configure RotatingFileHandler, debug mode flag, and add byte progress formatters ([cdfa8e4](https://github.com/Churma16/SilverSpoon-Reforged/commit/cdfa8e42e45e81c0e66b0f8aa79178df6e860e7b))
+* **ui:** add LogViewerDialog and insert Elapsed time column into task tree view ([32e2e4e](https://github.com/Churma16/SilverSpoon-Reforged/commit/32e2e4e89bc5629b20b11ff72b5b73ea01876ce6))
+
+### Bug Fixes
+
+* **downloader:** use curl_cffi TLS impersonation and handle Turnstile bypass state ([b9ee556](https://github.com/Churma16/SilverSpoon-Reforged/commit/b9ee5565f932f8adca11951f6cc4530680aeb99f))
+* **extraction:** prioritize bundled 7-Zip executable and generalize input bar placeholder text ([71d2de5](https://github.com/Churma16/SilverSpoon-Reforged/commit/71d2de5756b066b3309b531ba3d1b45d4e9900b1))
+* **extractor:** resolve Cloudflare Turnstile 403 block using SeleniumBase UC driver ([0eeb326](https://github.com/Churma16/SilverSpoon-Reforged/commit/0eeb326ef8b2af413314e074ca1c24b2d6f7733c))
+* **ui:** use format_size_progress formatting, handle SOLVING_SESSION status state, and update batch tree user roles ([a7a0a9f](https://github.com/Churma16/SilverSpoon-Reforged/commit/a7a0a9f0b9275f4e5c310387edaff32b4392289f))
 ## [1.7.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.7.0...v1.7.1) (2026-07-31)
 ## [1.7.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.6.0...v1.7.0) (2026-07-30)
 

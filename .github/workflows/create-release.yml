@@ -25,6 +25,12 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Copy 7-Zip Binaries
+        shell: powershell
+        run: |
+          Copy-Item "C:\Program Files\7-Zip\7z.exe" . -ErrorAction Stop
+          Copy-Item "C:\Program Files\7-Zip\7z.dll" . -ErrorAction Stop
+
       - name: Build Executable
         run: |
           pyinstaller --clean SilverSpoon.spec
