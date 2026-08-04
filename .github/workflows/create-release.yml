@@ -25,9 +25,15 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Copy 7-Zip Binaries
+        shell: powershell
+        run: |
+          Copy-Item "C:\Program Files\7-Zip\7z.exe" . -ErrorAction Stop
+          Copy-Item "C:\Program Files\7-Zip\7z.dll" . -ErrorAction Stop
+
       - name: Build Executable
         run: |
-          pyinstaller --clean --noconsole --onefile --icon="SilverSpoon.ico" --add-binary "7z.exe;." --add-binary "7z.dll;." --add-data "SilverSpoon.ico;." --add-data "SilverSpoon.png;." --name "SilverSpoon" pyqt_downloader.py
+          pyinstaller --clean --noconsole --onefile --icon="SilverSpoon.ico" --add-binary "7z.exe;." --add-binary "7z.dll;." --add-data "SilverSpoon.ico;." --add-data "SilverSpoon.png;." --add-data "VERSION;." --name "SilverSpoon" pyqt_downloader.py
 
       - name: Create Zip Archive
         shell: powershell
