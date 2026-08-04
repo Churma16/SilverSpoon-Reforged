@@ -9,6 +9,8 @@ import tempfile
 import zipfile
 import shutil
 
+logger = logging.getLogger(__name__)
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QTreeWidget,
@@ -39,7 +41,7 @@ from ui.url_input_bar import UrlInputBarWidget
 from ui.menus import setup_menu_bar
 from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog, LogViewerDialog
 from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
-from utils.formatters import format_error_message
+from utils.formatters import format_error_message, format_bytes, format_size_progress
 
 
 class MainWindow(QMainWindow):
@@ -105,8 +107,11 @@ class MainWindow(QMainWindow):
         )
         
         def check_extraction_callback():
-            if hasattr(self, 'action_bar') and self.action_bar.extract_checkbox.isChecked():
-                self.extraction_manager.check_extraction()
+            try:
+                if hasattr(self, 'action_bar') and hasattr(self.action_bar, 'extract_checkbox') and self.action_bar.extract_checkbox.isChecked():
+                    self.extraction_manager.check_extraction()
+            except (RuntimeError, AttributeError):
+                pass
 
         self.download_manager.start(check_extraction_callback)
         
@@ -179,10 +184,13 @@ class MainWindow(QMainWindow):
                 task.pause_flag = False
 
     def force_quit(self):
+        if hasattr(self, 'download_manager'):
+            self.download_manager.stop()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
         save_history(self.tasks)
         save_settings(self.settings)
+        logging.shutdown()
         QApplication.quit()
 
     def closeEvent(self, event):
@@ -202,13 +210,15 @@ class MainWindow(QMainWindow):
         self.settings["column_widths"] = col_widths
         save_settings(self.settings)
         
-        if hasattr(self, 'tray_icon'):
-            self.tray_icon.hide()
+        # Stop background download loop
+        if hasattr(self, 'download_manager'):
+            self.download_manager.stop()
 
         # Shut down the SeleniumBase UC browser driver used by the extractor
         if hasattr(self, 'extractor') and hasattr(self.extractor, 'close'):
             self.extractor.close()
             
+        logging.shutdown()
         event.accept()
 
     def setup_ui(self):
@@ -245,12 +255,13 @@ class MainWindow(QMainWindow):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         
         col_widths = self.settings.get("column_widths", {})
-        default_widths = {0: 380, 1: 45, 2: 100, 3: 80, 4: 80, 5: 75, 6: 75, 7: 100}
+        default_widths = {0: 300, 1: 40, 2: 90, 3: 70, 4: 80, 5: 65, 6: 65, 7: 140}
         for col, width in default_widths.items():
             saved_w = col_widths.get(str(col), width)
             self.tree.setColumnWidth(col, int(saved_w))
             
         self.tree.header().moveSection(1, 0)
+        self.tree.header().moveSection(7, 2)
         self.tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -360,7 +371,8 @@ class MainWindow(QMainWindow):
     def get_or_create_batch_item(self, folder_name):
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
-            if item.text(0) == folder_name:
+            stored_folder = item.data(0, Qt.ItemDataRole.UserRole) or item.text(0)
+            if stored_folder == folder_name:
                 return item
                 
         batch_item = QTreeWidgetItem(self.tree)
@@ -371,6 +383,7 @@ class MainWindow(QMainWindow):
             Qt.ItemFlag.ItemIsEnabled |
             Qt.ItemFlag.ItemIsSelectable
         )
+        batch_item.setData(0, Qt.ItemDataRole.UserRole, folder_name)
         batch_item.setText(0, folder_name)
         batch_item.setCheckState(1, Qt.CheckState.Unchecked)
         batch_item.setExpanded(False)
@@ -380,7 +393,7 @@ class MainWindow(QMainWindow):
         reordered_task_list = []
         for batch_index in range(self.tree.topLevelItemCount()):
             top_level_batch_item = self.tree.topLevelItem(batch_index)
-            current_folder_name = top_level_batch_item.text(0)
+            current_folder_name = top_level_batch_item.data(0, Qt.ItemDataRole.UserRole) or top_level_batch_item.text(0)
             
             for child_index in range(top_level_batch_item.childCount()):
                 child_task_item = top_level_batch_item.child(child_index)
@@ -430,6 +443,7 @@ class MainWindow(QMainWindow):
         child_item.setText(4, "-")
         child_item.setText(5, "-")
         child_item.setText(6, "-")
+        child_item.setText(7, "-")
         
         task.tree_item = child_item
         
@@ -673,10 +687,13 @@ class MainWindow(QMainWindow):
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec():
-            self.settings = dialog.get_updated_settings()
+            updated_settings = dialog.get_updated_settings()
+            self.settings.update(updated_settings)
             save_settings(self.settings)
             
             self.max_workers = self.settings.get("max_workers", 3)
+            if hasattr(self, 'download_manager'):
+                self.download_manager.max_workers = self.max_workers
             default_dir = self.settings.get("default_save_dir", os.path.join(os.path.expanduser("~"), "Downloads"))
             self.dir_input.setText(default_dir)
             self.extract_checkbox.setChecked(self.settings.get("extract_after_download", False))
@@ -724,7 +741,7 @@ class MainWindow(QMainWindow):
                     page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
                     ff_links = list(dict.fromkeys([u.rstrip('"\';>,') for u in page_ff_urls]))
             except Exception as e:
-                QMessageBox.critical(self, "Scraper Error", f"Failed to scrape webpage links:\n{e}")
+                QMessageBox.critical(self, "Link Extractor Error", f"Failed to extract webpage links:\n{e}")
                 return
 
         cleaned_links = list(dict.fromkeys(ff_links))
@@ -747,7 +764,7 @@ class MainWindow(QMainWindow):
         folder_name, ok = QInputDialog.getText(
             self, 
             "Batch Folder Name", 
-            "Enter a folder name for these files:\n(This groups main game and optional files together)",
+            "Enter a folder name for these files:\n(This groups related multi-part archive files together)",
             QLineEdit.EchoMode.Normal,
             suggested_folder
         )
@@ -1099,9 +1116,7 @@ class MainWindow(QMainWindow):
                 continue
             prog_str = f"{task.progress:.1f}%" if task.status not in (TaskStatus.EXTRACTED, TaskStatus.UNPACKING, TaskStatus.EXTRACT_ERROR) else "-"
             speed_str = f"{task.speed:.2f} MB/s" if task.status == TaskStatus.DOWNLOADING else "-"
-            size_mb = task.total_bytes / (1024*1024)
-            dl_mb = task.downloaded_bytes / (1024*1024)
-            size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if task.total_bytes > 0 else "-"
+            size_str = format_size_progress(task.downloaded_bytes, task.total_bytes) if task.total_bytes > 0 else "-"
             
             elapsed_sec = getattr(task, 'elapsed_seconds', 0.0)
             if getattr(task, 'started_at', None):
@@ -1116,7 +1131,7 @@ class MainWindow(QMainWindow):
                     eta_seconds = remaining_bytes / (task.speed * 1024 * 1024)
                     eta_str = self.format_time(eta_seconds)
                 task.tree_item.setToolTip(6, "")
-            elif task.status in (TaskStatus.IN_QUEUE, TaskStatus.STANDBY, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF):
+            elif task.status in (TaskStatus.IN_QUEUE, TaskStatus.STANDBY, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION):
                 fn = getattr(task, 'folder_name', 'Default')
                 if task.total_bytes > 0:
                     task_rem = max(0, task.total_bytes - task.downloaded_bytes)
@@ -1145,7 +1160,7 @@ class MainWindow(QMainWindow):
             task.tree_item.setText(6, eta_str)
             task.tree_item.setText(7, size_str)
             
-        active_tasks = [t for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF)]
+        active_tasks = [t for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION)]
         pending_tasks = [t for t in self.tasks if t.status == TaskStatus.IN_QUEUE]
         active_count = len(active_tasks)
         pending_count = len(pending_tasks)
@@ -1206,7 +1221,7 @@ class MainWindow(QMainWindow):
                         all_completed = False
                     if "Failed" in str(task.status) or "Error" in str(task.status):
                         any_error = True
-                    if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF, TaskStatus.IN_QUEUE):
+                    if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION, TaskStatus.IN_QUEUE):
                         any_downloading = True
                         
             batch_status = BatchStatus.STANDBY
@@ -1223,9 +1238,10 @@ class MainWindow(QMainWindow):
             prog = (total_dl / total_size * 100) if total_size > 0 else 0
             prog_str = f"{prog:.1f}%"
             speed_str = f"{total_speed:.2f} MB/s" if total_speed > 0 else "-"
-            size_mb = total_size / (1024*1024)
-            dl_mb = total_dl / (1024*1024)
-            size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if total_size > 0 else "-"
+            
+            folder_name = batch_item.data(0, Qt.ItemDataRole.UserRole) or batch_item.text(0)
+            batch_item.setText(0, folder_name)
+            size_str = format_size_progress(total_dl, total_size) if total_size > 0 else "-"
             
             elapsed_str = self.format_time(total_elapsed) if total_elapsed > 0 else "-"
             
@@ -1249,7 +1265,6 @@ class MainWindow(QMainWindow):
             batch_item.setText(6, eta_str)
             batch_item.setText(7, size_str)
 
-            folder_name = batch_item.text(0)
             if batch_status in (BatchStatus.COMPLETED, TaskStatus.EXTRACTED) and folder_name not in self.notified_batches:
                 self.notified_batches.add(folder_name)
                 self.send_notification("Batch Finished", f"Batch '{folder_name}' is {str(batch_status).lower()}!")
@@ -1320,6 +1335,6 @@ class MainWindow(QMainWindow):
             else:
                 os.system("shutdown -h now")
         except Exception as e:
-            logging.error(f"Failed to execute system shutdown: {e}")
+            logger.error(f"Failed to execute system shutdown: {e}")
 
 
