@@ -1,4 +1,4 @@
-import cloudscraper
+from curl_cffi import requests as cffi_requests
 import concurrent.futures
 import threading
 import time
@@ -15,8 +15,9 @@ class DownloadManager:
         self.chunk_size = chunk_size
         self.speed_limit_kb = speed_limit_kb
         self.rate_limiter = GlobalRateLimiter()
-        self.scraper = cloudscraper.create_scraper(browser='chrome')
+        self.scraper = cffi_requests.Session(impersonate="chrome")
         self.extractor = FuckingFastExtractor(self.scraper)
+
         self.total_links = 0
         self.completed_links = 0
         self.failed_links = []

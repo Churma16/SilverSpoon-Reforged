@@ -10,10 +10,14 @@ from PyQt6.QtCore import Qt, QTimer
 from ui.main_window import MainWindow
 from core.settings import OLD_EXE_CLEANUP_MARKER_SUFFIX
 
+log_file = os.path.expanduser("~/.silverspoon.log")
 logging.basicConfig(
-    filename=os.path.expanduser("~/.silverspoon.log"),
-    level=logging.ERROR,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file, encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 
 def main():

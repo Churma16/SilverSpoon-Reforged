@@ -26,7 +26,7 @@ class DownloadManager:
 
     def _download_manager_loop(self, extract_check_callback=None):
         while self.is_running:
-            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING))
+            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF))
             if active < self.max_workers:
                 for task in self.tasks:
                     if task.status == TaskStatus.IN_QUEUE:
@@ -49,131 +49,137 @@ class DownloadManager:
         return direct_link
 
     def download_worker(self, task):
-        # Quick check: If file is already 100% downloaded on disk, finish immediately without network call
-        if os.path.exists(task.filepath) and (task.progress >= 100 or (task.total_bytes > 0 and os.path.getsize(task.filepath) >= task.total_bytes)):
-            task.downloaded_bytes = task.total_bytes if task.total_bytes > 0 else os.path.getsize(task.filepath)
-            task.progress = 100.0
-            task.status = TaskStatus.FINISHED
-            task.error_message = ""
-            self.trigger_history_save_callback()
-            return
-
-        dl_url = self.get_direct_link(task)
-        if not dl_url:
-            if not task.cancel_flag and not task.pause_flag:
-                task.status = TaskStatus.FAILED
-                if not task.error_message:
-                    task.error_message = "Could not get the direct download link."
-            return
-            
-        if task.cancel_flag:
-            task.status = TaskStatus.CANCELLED
-            return
-            
-        if task.pause_flag:
-            task.status = TaskStatus.PAUSED
-            return
-
-        task.status = TaskStatus.DOWNLOADING
-        task.error_message = ""
-        
+        task.started_at = time.time()
         try:
-            if not os.path.exists(task.save_dir):
-                try:
-                    os.makedirs(task.save_dir, exist_ok=True)
-                except Exception as e:
-                    task.status = TaskStatus.FAILED
-                    task.error_message = f"Failed to create save directory '{task.save_dir}'. {format_error_message(e)}"
-                    self.trigger_history_save_callback()
-                    return
-                
-            initial_size = 0
-            if os.path.exists(task.filepath):
-                initial_size = os.path.getsize(task.filepath)
-                
-            head_req = self.scraper.head(dl_url)
-            total_size = int(head_req.headers.get('content-length', 0))
-            task.total_bytes = total_size
-            
-            if initial_size > 0 and initial_size == total_size:
-                task.downloaded_bytes = total_size
-                task.progress = 100
+            # Quick check: If file is already 100% downloaded on disk, finish immediately without network call
+            if os.path.exists(task.filepath) and (task.progress >= 100 or (task.total_bytes > 0 and os.path.getsize(task.filepath) >= task.total_bytes)):
+                task.downloaded_bytes = task.total_bytes if task.total_bytes > 0 else os.path.getsize(task.filepath)
+                task.progress = 100.0
                 task.status = TaskStatus.FINISHED
                 task.error_message = ""
+                self.trigger_history_save_callback()
+                return
+
+            task.status = TaskStatus.BYPASSING_CF
+            dl_url = self.get_direct_link(task)
+            if not dl_url:
+                if not task.cancel_flag and not task.pause_flag:
+                    task.status = TaskStatus.FAILED
+                    if not task.error_message:
+                        task.error_message = "Could not get the direct download link."
                 return
                 
-            resume_header = {}
-            mode = 'wb'
-            if initial_size > 0:
-                resume_header = {'Range': f'bytes={initial_size}-'}
-                mode = 'ab'
+            if task.cancel_flag:
+                task.status = TaskStatus.CANCELLED
+                return
                 
-            with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
-                if r.status_code not in (200, 206):
-                    task.status = TaskStatus.FAILED
-                    if r.status_code == 403:
-                        task.error_message = f"HTTP 403 (Forbidden): Cloudflare anti-bot blocked your connection. Try toggling your VPN or changing DNS (1.1.1.1)."
-                    else:
-                        task.error_message = f"Download request failed. Server returned HTTP {r.status_code}."
-                    if r.status_code in (403, 503):
-                        initial_chunk_bytes = next(r.iter_content(chunk_size=500), b"")
-                        error_body_preview = initial_chunk_bytes.decode('utf-8', errors='ignore')
-                        logging.error(f"Download 403/503 for {dl_url}. Body preview: {error_body_preview}")
+            if task.pause_flag:
+                task.status = TaskStatus.PAUSED
+                return
+
+            task.status = TaskStatus.DOWNLOADING
+            task.error_message = ""
+            
+            try:
+                if not os.path.exists(task.save_dir):
+                    try:
+                        os.makedirs(task.save_dir, exist_ok=True)
+                    except Exception as e:
+                        task.status = TaskStatus.FAILED
+                        task.error_message = f"Failed to create save directory '{task.save_dir}'. {format_error_message(e)}"
+                        self.trigger_history_save_callback()
+                        return
+                    
+                initial_size = 0
+                if os.path.exists(task.filepath):
+                    initial_size = os.path.getsize(task.filepath)
+                    
+                head_req = self.scraper.head(dl_url)
+                total_size = int(head_req.headers.get('content-length', 0))
+                task.total_bytes = total_size
+                
+                if initial_size > 0 and initial_size == total_size:
+                    task.downloaded_bytes = total_size
+                    task.progress = 100
+                    task.status = TaskStatus.FINISHED
+                    task.error_message = ""
                     return
                     
-                if r.status_code == 200 and initial_size > 0:
+                resume_header = {}
+                mode = 'wb'
+                if initial_size > 0:
+                    resume_header = {'Range': f'bytes={initial_size}-'}
+                    mode = 'ab'
+                    
+                resp = self.scraper.get(dl_url, stream=True, headers=resume_header)
+                if resp.status_code not in (200, 206):
+                    task.status = TaskStatus.FAILED
+                    if resp.status_code == 403:
+                        task.error_message = f"HTTP 403 (Forbidden): Cloudflare anti-bot blocked your connection. Try toggling your VPN or changing DNS (1.1.1.1)."
+                    else:
+                        task.error_message = f"Download request failed. Server returned HTTP {resp.status_code}."
+                    if resp.status_code in (403, 503):
+                        logging.error(f"Download 403/503 for {dl_url}.")
+                    return
+                    
+                if resp.status_code == 200 and initial_size > 0:
                     mode = 'wb'
                     initial_size = 0
                     
                 task.downloaded_bytes = initial_size
-                if total_size == 0 and 'content-length' in r.headers:
-                    task.total_bytes = int(r.headers['content-length']) + initial_size
+                if total_size == 0 and 'content-length' in resp.headers:
+                    task.total_bytes = int(resp.headers['content-length']) + initial_size
                 elif total_size == 0:
                     task.total_bytes = 0
                     
-                start_time = time.time()
-                last_time = start_time
+                last_time = time.time()
                 bytes_since_last = 0
                 
                 with open(task.filepath, mode) as f:
-                    for chunk in r.iter_content(chunk_size=8192*8):
-                        if task.pause_flag:
-                            task.status = TaskStatus.PAUSED
-                            task.speed = 0
-                            return
-                        if task.cancel_flag:
-                            task.status = TaskStatus.CANCELLED
-                            task.speed = 0
-                            return
-                            
-                        if chunk:
-                            f.write(chunk)
-                            size = len(chunk)
-                            task.downloaded_bytes += size
-                            bytes_since_last += size
-                            
-                            if self.session_bytes_lock_callback:
-                                self.session_bytes_lock_callback(size)
-                            
-                            now = time.time()
-                            if now - last_time > 0.5:
-                                task.speed = (bytes_since_last / (now - last_time)) / (1024*1024)
-                                if task.total_bytes > 0:
-                                    task.progress = (task.downloaded_bytes / task.total_bytes) * 100
-                                last_time = now
-                                bytes_since_last = 0
+                    for chunk in resp.iter_content(chunk_size=8192*8):
+
+                            if task.pause_flag:
+                                task.status = TaskStatus.PAUSED
+                                task.speed = 0
+                                return
+                            if task.cancel_flag:
+                                task.status = TaskStatus.CANCELLED
+                                task.speed = 0
+                                return
                                 
-                            self.rate_limiter.consume(size, self.settings.get("download_speed_limit", 0))
-                
-                task.progress = 100
-                task.speed = 0
-                task.status = TaskStatus.FINISHED
-                task.error_message = ""
-                self.trigger_history_save_callback()
-                
-        except Exception as e:
-            logging.error(f"Download worker error for task {task.link}: {e}", exc_info=True)
-            if not task.cancel_flag and not task.pause_flag:
-                task.status = TaskStatus.FAILED
-                task.error_message = f"Download failed. {format_error_message(e)}"
-                self.trigger_history_save_callback()
+                            if chunk:
+                                f.write(chunk)
+                                size = len(chunk)
+                                task.downloaded_bytes += size
+                                bytes_since_last += size
+                                
+                                if self.session_bytes_lock_callback:
+                                    self.session_bytes_lock_callback(size)
+                                
+                                now = time.time()
+                                if now - last_time > 0.5:
+                                    task.speed = (bytes_since_last / (now - last_time)) / (1024*1024)
+                                    if task.total_bytes > 0:
+                                        task.progress = (task.downloaded_bytes / task.total_bytes) * 100
+                                    last_time = now
+                                    bytes_since_last = 0
+                                    
+                                self.rate_limiter.consume(size, self.settings.get("download_speed_limit", 0))
+                    
+                    task.progress = 100
+                    task.speed = 0
+                    task.status = TaskStatus.FINISHED
+                    task.error_message = ""
+                    self.trigger_history_save_callback()
+                    
+            except Exception as e:
+                logging.error(f"Download worker error for task {task.link}: {e}", exc_info=True)
+                if not task.cancel_flag and not task.pause_flag:
+                    task.status = TaskStatus.FAILED
+                    task.error_message = f"Download failed. {format_error_message(e)}"
+                    self.trigger_history_save_callback()
+        finally:
+            if task.started_at:
+                task.elapsed_seconds += time.time() - task.started_at
+                task.started_at = None
+

@@ -33,6 +33,8 @@ class DownloadTask:
         self.downloaded_bytes = 0
         self.total_bytes = 0
         self.error_message = ""
+        self.started_at = None
+        self.elapsed_seconds = 0.0
         
         self.pause_flag = False
         self.cancel_flag = False
@@ -48,7 +50,8 @@ class DownloadTask:
             "error_message": self.error_message,
             "downloaded_bytes": self.downloaded_bytes,
             "total_bytes": self.total_bytes,
-            "progress": self.progress
+            "progress": self.progress,
+            "elapsed_seconds": self.elapsed_seconds
         }
         
     @classmethod
@@ -58,7 +61,7 @@ class DownloadTask:
         migrated = migrate_status(raw_status)
         
         # Ensure it doesn't auto-start if it was active when closed
-        if migrated in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING):
+        if migrated in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF):
             task.status = TaskStatus.PAUSED
             task.pause_flag = True
         else:
@@ -68,4 +71,5 @@ class DownloadTask:
         task.total_bytes = data.get("total_bytes", 0)
         task.progress = data.get("progress", 0.0)
         task.error_message = data.get("error_message", "")
+        task.elapsed_seconds = data.get("elapsed_seconds", 0.0)
         return task
