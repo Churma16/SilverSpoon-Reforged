@@ -8,6 +8,8 @@ import logging
 from core.types import TaskStatus
 from utils.formatters import format_error_message
 
+logger = logging.getLogger(__name__)
+
 class ExtractionManager:
     def __init__(self, tasks, extracted_folders, base_dir, trigger_history_save_callback):
         self.tasks = tasks
@@ -42,6 +44,7 @@ class ExtractionManager:
         import time
         save_dir = tasks_in_folder[0].save_dir
         folder_name = tasks_in_folder[0].folder_name
+        logger.info(f"Starting auto-extraction for folder: {folder_name} in {save_dir}")
         
         for t in tasks_in_folder:
             t.status = TaskStatus.UNPACKING
@@ -68,6 +71,7 @@ class ExtractionManager:
                     t.error_message = f"No archive file was found in {save_dir}."
                 if folder_name in self.extracted_folders:
                     self.extracted_folders.remove(folder_name)
+                logger.warning(f"No archive file found for extraction in {save_dir}")
                 return
                 
             cmd = None
@@ -102,10 +106,11 @@ class ExtractionManager:
                     t.error_message = "No supported extractor was found. Install 7-Zip or WinRAR, then retry extraction."
                 if folder_name in self.extracted_folders:
                     self.extracted_folders.remove(folder_name)
+                logger.error("No supported archive extractor tool found on system.")
                 return
                 
             creationflags = 0x08000000 if sys.platform == 'win32' else 0
-            logging.info(f"Executing extraction command: {cmd}")
+            logger.info(f"Executing extraction command: {cmd}")
             subprocess.run(
                 cmd,
                 check=True,
@@ -118,10 +123,11 @@ class ExtractionManager:
             for t in tasks_in_folder:
                 t.status = TaskStatus.EXTRACTED
                 t.error_message = ""
+            logger.info(f"Extraction completed successfully for folder: {folder_name}")
             self.trigger_history_save_callback()
                 
         except subprocess.CalledProcessError as e:
-            logging.error(f"Extraction error (subprocess): {e}", exc_info=True)
+            logger.error(f"Extraction error (subprocess): {e}", exc_info=True)
             for t in tasks_in_folder:
                 t.status = TaskStatus.EXTRACT_ERROR
                 t.error_message = f"Extractor failed with exit code {e.returncode}. The archive may be corrupt, incomplete, or password-protected."
@@ -129,7 +135,7 @@ class ExtractionManager:
                 self.extracted_folders.remove(folder_name)
             self.trigger_history_save_callback()
         except Exception as e:
-            logging.error(f"Extraction error: {e}", exc_info=True)
+            logger.error(f"Extraction error: {e}", exc_info=True)
             for t in tasks_in_folder:
                 t.status = TaskStatus.EXTRACT_ERROR
                 t.error_message = f"Extraction failed: {format_error_message(e)}"

@@ -5,6 +5,8 @@ import logging
 from core.types import TaskStatus
 from utils.formatters import format_error_message
 
+logger = logging.getLogger(__name__)
+
 class DownloadManager:
     def __init__(self, tasks, max_workers, rate_limiter, scraper, extractor, settings, session_bytes_lock_callback, trigger_history_save_callback):
         self.tasks = tasks
@@ -24,20 +26,27 @@ class DownloadManager:
         self.manager_thread = threading.Thread(target=self._download_manager_loop, args=(extract_check_callback,), daemon=True)
         self.manager_thread.start()
 
+    def stop(self):
+        self.is_running = False
+
     def _download_manager_loop(self, extract_check_callback=None):
         while self.is_running:
-            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF))
+            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION))
             if active < self.max_workers:
                 for task in self.tasks:
                     if task.status == TaskStatus.IN_QUEUE:
                         task.status = TaskStatus.CONNECTING
+                        logger.info(f"Queued task started download worker: {task.link}")
                         threading.Thread(target=self.download_worker, args=(task,), daemon=True).start()
                         active += 1
                         if active >= self.max_workers:
                             break
             
-            if extract_check_callback:
-                extract_check_callback()
+            if extract_check_callback and self.is_running:
+                try:
+                    extract_check_callback()
+                except (RuntimeError, AttributeError):
+                    pass
                 
             time.sleep(1)
 
@@ -45,6 +54,7 @@ class DownloadManager:
         direct_link, err_msg = self.extractor.extract_direct_url(task.link, task.file_id)
         if not direct_link:
             task.error_message = err_msg or "Could not get the direct download link. The link may be expired or blocked."
+            logger.warning(f"Failed to obtain direct link for task {task.link}: {task.error_message}")
             return None
         return direct_link
 
@@ -57,10 +67,12 @@ class DownloadManager:
                 task.progress = 100.0
                 task.status = TaskStatus.FINISHED
                 task.error_message = ""
+                logger.info(f"Task already fully downloaded on disk: {task.filepath}")
                 self.trigger_history_save_callback()
                 return
 
-            task.status = TaskStatus.BYPASSING_CF
+            task.status = TaskStatus.SOLVING_SESSION
+            logger.info(f"Solving Session for task: {task.link}")
             dl_url = self.get_direct_link(task)
             if not dl_url:
                 if not task.cancel_flag and not task.pause_flag:
@@ -71,14 +83,17 @@ class DownloadManager:
                 
             if task.cancel_flag:
                 task.status = TaskStatus.CANCELLED
+                logger.info(f"Task cancelled before download: {task.link}")
                 return
                 
             if task.pause_flag:
                 task.status = TaskStatus.PAUSED
+                logger.info(f"Task paused before download: {task.link}")
                 return
 
             task.status = TaskStatus.DOWNLOADING
             task.error_message = ""
+            logger.info(f"Downloading stream from: {dl_url}")
             
             try:
                 if not os.path.exists(task.save_dir):
@@ -87,6 +102,7 @@ class DownloadManager:
                     except Exception as e:
                         task.status = TaskStatus.FAILED
                         task.error_message = f"Failed to create save directory '{task.save_dir}'. {format_error_message(e)}"
+                        logger.error(f"Directory creation error for {task.save_dir}: {e}", exc_info=True)
                         self.trigger_history_save_callback()
                         return
                     
@@ -103,6 +119,7 @@ class DownloadManager:
                     task.progress = 100
                     task.status = TaskStatus.FINISHED
                     task.error_message = ""
+                    logger.info(f"Task completed based on content length match: {task.filepath}")
                     return
                     
                 resume_header = {}
@@ -110,6 +127,7 @@ class DownloadManager:
                 if initial_size > 0:
                     resume_header = {'Range': f'bytes={initial_size}-'}
                     mode = 'ab'
+                    logger.info(f"Resuming download from byte offset {initial_size} for {task.filepath}")
                     
                 resp = self.scraper.get(dl_url, stream=True, headers=resume_header)
                 if resp.status_code not in (200, 206):
@@ -119,7 +137,7 @@ class DownloadManager:
                     else:
                         task.error_message = f"Download request failed. Server returned HTTP {resp.status_code}."
                     if resp.status_code in (403, 503):
-                        logging.error(f"Download 403/503 for {dl_url}.")
+                        logger.error(f"Download 403/503 for {dl_url}.")
                     return
                     
                 if resp.status_code == 200 and initial_size > 0:
@@ -141,10 +159,12 @@ class DownloadManager:
                             if task.pause_flag:
                                 task.status = TaskStatus.PAUSED
                                 task.speed = 0
+                                logger.info(f"Download paused during stream: {task.link}")
                                 return
                             if task.cancel_flag:
                                 task.status = TaskStatus.CANCELLED
                                 task.speed = 0
+                                logger.info(f"Download cancelled during stream: {task.link}")
                                 return
                                 
                             if chunk:
@@ -170,10 +190,11 @@ class DownloadManager:
                     task.speed = 0
                     task.status = TaskStatus.FINISHED
                     task.error_message = ""
+                    logger.info(f"Download finished successfully: {task.filepath}")
                     self.trigger_history_save_callback()
                     
             except Exception as e:
-                logging.error(f"Download worker error for task {task.link}: {e}", exc_info=True)
+                logger.error(f"Download worker error for task {task.link}: {e}", exc_info=True)
                 if not task.cancel_flag and not task.pause_flag:
                     task.status = TaskStatus.FAILED
                     task.error_message = f"Download failed. {format_error_message(e)}"

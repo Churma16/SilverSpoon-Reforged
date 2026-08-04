@@ -61,7 +61,7 @@ class DownloadTask:
         migrated = migrate_status(raw_status)
         
         # Ensure it doesn't auto-start if it was active when closed
-        if migrated in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF):
+        if migrated in (TaskStatus.DOWNLOADING, TaskStatus.IN_QUEUE, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION):
             task.status = TaskStatus.PAUSED
             task.pause_flag = True
         else:

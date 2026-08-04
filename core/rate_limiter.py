@@ -12,6 +12,7 @@ class GlobalRateLimiter:
             return
             
         limit_bytes = limit_kb * 1024.0
+        max_tokens = max(limit_bytes, chunk_bytes * 2.0)
         
         while True:
             with self.lock:
@@ -20,8 +21,8 @@ class GlobalRateLimiter:
                 self.last_update = now
                 
                 self.tokens += elapsed * limit_bytes
-                if self.tokens > limit_bytes:
-                    self.tokens = limit_bytes
+                if self.tokens > max_tokens:
+                    self.tokens = max_tokens
                     
                 if self.tokens >= chunk_bytes:
                     self.tokens -= chunk_bytes
