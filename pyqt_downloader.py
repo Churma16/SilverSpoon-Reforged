@@ -35,6 +35,15 @@ if not is_debug_mode:
 logger = logging.getLogger("pyqt_downloader")
 
 def main():
+    # Set explicit AppUserModelID on Windows so taskbar does not group with other forks
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            app_id = "churma16.silverspoon.reforged.ui"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except Exception as e:
+            logger.warning(f"Could not set AppUserModelID: {e}")
+
     # Perform cleanup of old exe if marker file exists
     if sys.platform == "win32" and hasattr(sys, 'frozen'):
         marker_file = sys.executable + OLD_EXE_CLEANUP_MARKER_SUFFIX
