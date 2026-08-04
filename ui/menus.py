@@ -39,6 +39,10 @@ def setup_menu_bar(window):
     changelog_action.triggered.connect(window.show_changelog_dialog)
     help_menu.addAction(changelog_action)
     
+    log_action = QAction("View &Debug Logs", window)
+    log_action.triggered.connect(window.show_log_viewer_dialog)
+    help_menu.addAction(log_action)
+    
     help_menu.addSeparator()
     
     # 3. Repository & Community

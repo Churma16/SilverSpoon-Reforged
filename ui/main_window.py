@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QAction, QDesktopServices, QIcon, QBrush, QColor
 from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent, QMetaObject, Q_ARG
 
-import cloudscraper
+from curl_cffi import requests as cffi_requests
 from update_logic import (
     UpdateCheckerThread, UpdateDownloaderDialog,
     extract_and_verify_update, perform_exe_replacement, launch_restart_script
@@ -37,7 +37,7 @@ from ui.action_bar import ActionBarWidget
 from ui.directory_bar import DirectoryBarWidget
 from ui.url_input_bar import UrlInputBarWidget
 from ui.menus import setup_menu_bar
-from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog
+from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog, LogViewerDialog
 from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
 from utils.formatters import format_error_message
 
@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
         self.tasks = []
         self.max_workers = self.settings.get("max_workers", 3)
         self.rate_limiter = GlobalRateLimiter()
-        self.scraper = cloudscraper.create_scraper(browser='chrome')
+        self.scraper = cffi_requests.Session(impersonate="chrome")
         self.extractor = FuckingFastExtractor(self.scraper)
         self.is_all_selected = False
         self.extracted_folders = set()
@@ -204,6 +204,10 @@ class MainWindow(QMainWindow):
         
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
+
+        # Shut down the SeleniumBase UC browser driver used by the extractor
+        if hasattr(self, 'extractor') and hasattr(self.extractor, 'close'):
+            self.extractor.close()
             
         event.accept()
 
@@ -233,15 +237,15 @@ class MainWindow(QMainWindow):
         # 3. Tree View Section
         self.tree = ReorderableTreeWidget()
         self.tree.order_changed.connect(self.sync_tasks_order_from_tree)
-        self.tree.setColumnCount(7)
-        self.tree.setHeaderLabels(["Filename / Folder", "Sel", "Status", "Progress", "Speed", "ETA", "Size"])
+        self.tree.setColumnCount(8)
+        self.tree.setHeaderLabels(["Filename / Folder", "Sel", "Status", "Progress", "Speed", "Elapsed", "ETA", "Size"])
         
         header = self.tree.header()
-        for i in range(7):
+        for i in range(8):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         
         col_widths = self.settings.get("column_widths", {})
-        default_widths = {0: 380, 1: 45, 2: 100, 3: 80, 4: 80, 5: 80, 6: 100}
+        default_widths = {0: 380, 1: 45, 2: 100, 3: 80, 4: 80, 5: 75, 6: 75, 7: 100}
         for col, width in default_widths.items():
             saved_w = col_widths.get(str(col), width)
             self.tree.setColumnWidth(col, int(saved_w))
@@ -511,6 +515,10 @@ class MainWindow(QMainWindow):
         dialog = ChangelogDialog(self.base_dir, self)
         dialog.exec()
 
+    def show_log_viewer_dialog(self):
+        dialog = LogViewerDialog(self)
+        dialog.exec()
+
     def show_about_dialog(self):
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("About SilverSpoon Reforged")
@@ -710,7 +718,7 @@ class MainWindow(QMainWindow):
         if not ff_links and web_urls:
             target_url = web_urls[0]
             try:
-                scraper = cloudscraper.create_scraper(browser='chrome')
+                scraper = cffi_requests.Session(impersonate="chrome")
                 res = scraper.get(target_url, timeout=15)
                 if res.status_code == 200:
                     page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
@@ -1050,7 +1058,7 @@ class MainWindow(QMainWindow):
             
         self.trigger_history_save()
 
-    def format_eta(self, seconds):
+    def format_time(self, seconds):
         if seconds <= 0 or seconds == float('inf'):
             return "-"
         m, s = divmod(int(seconds), 60)
@@ -1063,6 +1071,7 @@ class MainWindow(QMainWindow):
             return f"{s}s"
 
     def update_ui(self):
+        import time
         global_speed = sum(getattr(task, 'speed', 0.0) for task in self.tasks if task.status == TaskStatus.DOWNLOADING)
         
         folder_estimated_sizes = {}
@@ -1094,15 +1103,20 @@ class MainWindow(QMainWindow):
             dl_mb = task.downloaded_bytes / (1024*1024)
             size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if task.total_bytes > 0 else "-"
             
+            elapsed_sec = getattr(task, 'elapsed_seconds', 0.0)
+            if getattr(task, 'started_at', None):
+                elapsed_sec += time.time() - task.started_at
+            elapsed_str = self.format_time(elapsed_sec) if elapsed_sec > 0 else "-"
+            
             eta_str = "-"
             if task.status == TaskStatus.DOWNLOADING:
                 remaining_bytes = max(0, task.total_bytes - task.downloaded_bytes)
                 cumulative_remaining_bytes += remaining_bytes
                 if task.speed > 0 and task.total_bytes > 0:
                     eta_seconds = remaining_bytes / (task.speed * 1024 * 1024)
-                    eta_str = self.format_eta(eta_seconds)
-                task.tree_item.setToolTip(5, "")
-            elif task.status in (TaskStatus.IN_QUEUE, TaskStatus.STANDBY, TaskStatus.CONNECTING):
+                    eta_str = self.format_time(eta_seconds)
+                task.tree_item.setToolTip(6, "")
+            elif task.status in (TaskStatus.IN_QUEUE, TaskStatus.STANDBY, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF):
                 fn = getattr(task, 'folder_name', 'Default')
                 if task.total_bytes > 0:
                     task_rem = max(0, task.total_bytes - task.downloaded_bytes)
@@ -1111,10 +1125,10 @@ class MainWindow(QMainWindow):
                     
                 cumulative_remaining_bytes += task_rem
                 eta_str = "-"
-                task.tree_item.setToolTip(5, "Waiting in queue")
+                task.tree_item.setToolTip(6, "Waiting in queue")
             elif task.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED, TaskStatus.UNPACKING):
                 eta_str = "-"
-                task.tree_item.setToolTip(5, "")
+                task.tree_item.setToolTip(6, "")
             
             task.tree_item.setText(2, str(task.status))
             status_color = getattr(task.status, 'color', '#ffffff')
@@ -1127,10 +1141,11 @@ class MainWindow(QMainWindow):
                 task.tree_item.setToolTip(2, "")
             task.tree_item.setText(3, prog_str)
             task.tree_item.setText(4, speed_str)
-            task.tree_item.setText(5, eta_str)
-            task.tree_item.setText(6, size_str)
+            task.tree_item.setText(5, elapsed_str)
+            task.tree_item.setText(6, eta_str)
+            task.tree_item.setText(7, size_str)
             
-        active_tasks = [t for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING)]
+        active_tasks = [t for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF)]
         pending_tasks = [t for t in self.tasks if t.status == TaskStatus.IN_QUEUE]
         active_count = len(active_tasks)
         pending_count = len(pending_tasks)
@@ -1145,7 +1160,7 @@ class MainWindow(QMainWindow):
 
         if global_speed > 0 and total_remaining > 0:
             queue_eta_seconds = total_remaining / (global_speed * 1024 * 1024)
-            queue_eta_str = self.format_eta(queue_eta_seconds)
+            queue_eta_str = self.format_time(queue_eta_seconds)
             self.global_speed_label.setText(f"Global Speed: {global_speed:.2f} MB/s | Total Queue ETA: {queue_eta_str} ({active_count} active, {pending_count} pending)")
         elif active_count > 0 or pending_count > 0:
             self.global_speed_label.setText(f"Global Speed: {global_speed:.2f} MB/s | ({active_count} active, {pending_count} pending)")
@@ -1160,6 +1175,7 @@ class MainWindow(QMainWindow):
             total_dl = 0
             total_size = 0
             total_speed = 0.0
+            total_elapsed = 0.0
             
             all_completed = True
             any_error = False
@@ -1181,11 +1197,16 @@ class MainWindow(QMainWindow):
                         total_size += folder_estimated_sizes.get(fn, 0)
                     total_speed += getattr(task, 'speed', 0.0)
                     
+                    task_elapsed = getattr(task, 'elapsed_seconds', 0.0)
+                    if getattr(task, 'started_at', None):
+                        task_elapsed += time.time() - task.started_at
+                    total_elapsed += task_elapsed
+                    
                     if task.status not in (TaskStatus.FINISHED, TaskStatus.EXTRACTED):
                         all_completed = False
                     if "Failed" in str(task.status) or "Error" in str(task.status):
                         any_error = True
-                    if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.IN_QUEUE):
+                    if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.BYPASSING_CF, TaskStatus.IN_QUEUE):
                         any_downloading = True
                         
             batch_status = BatchStatus.STANDBY
@@ -1206,15 +1227,17 @@ class MainWindow(QMainWindow):
             dl_mb = total_dl / (1024*1024)
             size_str = f"{dl_mb:.1f} / {size_mb:.1f} MB" if total_size > 0 else "-"
             
+            elapsed_str = self.format_time(total_elapsed) if total_elapsed > 0 else "-"
+            
             eta_str = "-"
             remaining_batch_bytes = max(0, total_size - total_dl)
             if any_downloading and remaining_batch_bytes > 0:
                 if total_speed > 0:
                     eta_seconds = remaining_batch_bytes / (total_speed * 1024 * 1024)
-                    eta_str = self.format_eta(eta_seconds)
+                    eta_str = self.format_time(eta_seconds)
                 elif global_speed > 0:
                     eta_seconds = remaining_batch_bytes / (global_speed * 1024 * 1024)
-                    eta_str = f"~{self.format_eta(eta_seconds)}"
+                    eta_str = f"~{self.format_time(eta_seconds)}"
             
             batch_item.setText(2, str(batch_status))
             status_color = getattr(batch_status, 'color', '#ffffff')
@@ -1222,8 +1245,9 @@ class MainWindow(QMainWindow):
             batch_item.setToolTip(2, "")
             batch_item.setText(3, prog_str)
             batch_item.setText(4, speed_str)
-            batch_item.setText(5, eta_str)
-            batch_item.setText(6, size_str)
+            batch_item.setText(5, elapsed_str)
+            batch_item.setText(6, eta_str)
+            batch_item.setText(7, size_str)
 
             folder_name = batch_item.text(0)
             if batch_status in (BatchStatus.COMPLETED, TaskStatus.EXTRACTED) and folder_name not in self.notified_batches:

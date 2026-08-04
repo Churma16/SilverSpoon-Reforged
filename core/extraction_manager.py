@@ -39,11 +39,13 @@ class ExtractionManager:
                 threading.Thread(target=self.extract_folder, args=(tasks_in_folder,), daemon=True).start()
 
     def extract_folder(self, tasks_in_folder):
+        import time
         save_dir = tasks_in_folder[0].save_dir
         folder_name = tasks_in_folder[0].folder_name
         
         for t in tasks_in_folder:
             t.status = TaskStatus.UNPACKING
+            t.started_at = time.time()
             
         try:
             files = os.listdir(save_dir)
@@ -133,3 +135,8 @@ class ExtractionManager:
             if folder_name in self.extracted_folders:
                 self.extracted_folders.remove(folder_name)
             self.trigger_history_save_callback()
+        finally:
+            for t in tasks_in_folder:
+                if getattr(t, 'started_at', None):
+                    t.elapsed_seconds += time.time() - t.started_at
+                    t.started_at = None

@@ -36,6 +36,55 @@ class ChangelogDialog(QDialog):
         layout.addWidget(btn_box)
 
 
+class LogViewerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Debug Logs - SilverSpoon")
+        self.resize(750, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        log_path = os.path.expanduser("~/.silverspoon.log")
+        content = ""
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception as e:
+                content = f"Failed to load log file:\n{e}"
+        else:
+            content = "Log file is empty or does not exist."
+            
+        self.text_edit = QTextEdit()
+        self.text_edit.setReadOnly(True)
+        self.text_edit.setPlainText(content)
+        # Scroll to bottom
+        self.text_edit.moveCursor(self.text_edit.textCursor().MoveOperation.End)
+        layout.addWidget(self.text_edit)
+        
+        btn_layout = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self.reload_logs)
+        btn_layout.addWidget(refresh_btn)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(self.reject)
+        btn_layout.addWidget(btn_box)
+        
+        layout.addLayout(btn_layout)
+
+    def reload_logs(self):
+        log_path = os.path.expanduser("~/.silverspoon.log")
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    self.text_edit.setPlainText(f.read())
+                self.text_edit.moveCursor(self.text_edit.textCursor().MoveOperation.End)
+            except Exception as e:
+                self.text_edit.setPlainText(f"Failed to reload log file:\n{e}")
+
+
+
 class WarningDialog(QDialog):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
