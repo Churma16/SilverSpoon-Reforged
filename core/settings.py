@@ -47,11 +47,13 @@ def load_settings():
         "download_speed_limit": 0,
         "extract_after_download": False,
         "auto_shutdown_on_completion": False,
+        "auto_shutdown_action": "Shutdown",
         "column_widths": {},
         "skip_delete_confirmation": False,
         "show_warning_dialog": True,
         "enable_notifications": True,
         "minimize_to_tray": False,
+        "auto_check_updates": False,
         "last_update_check": 0.0
     }
     settings_path = get_settings_path()

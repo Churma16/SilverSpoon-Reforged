@@ -39,7 +39,7 @@ from ui.action_bar import ActionBarWidget
 from ui.directory_bar import DirectoryBarWidget
 from ui.url_input_bar import UrlInputBarWidget
 from ui.menus import setup_menu_bar
-from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog, LogViewerDialog
+from ui.dialogs import WarningDialog, SettingsDialog, ChangelogDialog, LogViewerDialog, PrivacyPolicyDialog, TermsOfServiceDialog
 from ui.widgets import SpeedGraphWidget, SessionStatsWidget, ReorderableTreeWidget
 from utils.formatters import format_error_message, format_bytes, format_size_progress
 
@@ -82,7 +82,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(100, self.show_warning_dialog)
             
         # Start Update Checker
-        if sys.platform == "win32" and hasattr(sys, 'frozen'):
+        if sys.platform == "win32" and hasattr(sys, 'frozen') and self.settings.get("auto_check_updates", False):
             self.update_checker = UpdateCheckerThread(CURRENT_VERSION, GITHUB_REPO, get_settings_path())
             self.update_checker.update_available.connect(self.prompt_update)
             self.update_checker.check_finished.connect(self.update_last_check_time)
@@ -289,6 +289,7 @@ class MainWindow(QMainWindow):
         self.delete_btn = self.action_bar.delete_btn
         self.extract_checkbox = self.action_bar.extract_checkbox
         self.shutdown_checkbox = self.action_bar.shutdown_checkbox
+        self.shutdown_action_combo = self.action_bar.shutdown_action_combo
         self.clear_btn = self.action_bar.clear_btn
 
         self.action_bar.select_all_clicked.connect(self.toggle_select_all)
@@ -302,6 +303,7 @@ class MainWindow(QMainWindow):
         self.action_bar.clear_completed_clicked.connect(self.clear_finished)
         self.action_bar.extract_changed.connect(lambda val: self.save_setting_key("extract_after_download", val))
         self.action_bar.shutdown_changed.connect(lambda val: self.save_setting_key("auto_shutdown_on_completion", val))
+        self.action_bar.shutdown_action_changed.connect(lambda val: self.save_setting_key("auto_shutdown_action", val))
 
         main_layout.addWidget(self.action_bar)
 
@@ -459,7 +461,10 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "No Error Selected", "Select a failed task first, then copy its error details.")
 
     def copy_error_log(self, task):
-        log_path = os.path.expanduser("~/.silverspoon.log")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        log_path = os.path.join(base_dir, "logs", "silverspoon.log")
         if not os.path.exists(log_path):
             QMessageBox.information(self, "No Log", "No error log found.")
             return
@@ -550,6 +555,14 @@ class MainWindow(QMainWindow):
         
         if msg_box.clickedButton() == changelog_btn:
             self.show_changelog_dialog()
+
+    def show_privacy_policy_dialog(self):
+        dialog = PrivacyPolicyDialog(self)
+        dialog.exec()
+
+    def show_terms_of_service_dialog(self):
+        dialog = TermsOfServiceDialog(self)
+        dialog.exec()
 
     def show_warning_dialog(self):
         dialog = WarningDialog(self.settings, self)
@@ -1296,6 +1309,7 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
     def trigger_auto_shutdown(self):
+        action = self.settings.get("auto_shutdown_action", "Shutdown")
         self.shutdown_dialog_active = True
         self.shutdown_checkbox.setChecked(False)
         self.save_setting_key("auto_shutdown_on_completion", False)
@@ -1303,9 +1317,9 @@ class MainWindow(QMainWindow):
         countdown = 60
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Information)
-        msg_box.setWindowTitle("Auto-Shutdown Triggered")
-        msg_box.setText(f"All downloads and extractions completed.\n\nSystem will shut down in {countdown} seconds.")
-        cancel_btn = msg_box.addButton("Cancel Shutdown", QMessageBox.ButtonRole.RejectRole)
+        msg_box.setWindowTitle(f"Auto-{action} Triggered")
+        msg_box.setText(f"All downloads and extractions completed.\n\nSystem will {action.lower()} in {countdown} seconds.")
+        cancel_btn = msg_box.addButton(f"Cancel {action}", QMessageBox.ButtonRole.RejectRole)
         
         timer = QTimer(self)
         
@@ -1315,9 +1329,9 @@ class MainWindow(QMainWindow):
             if countdown <= 0:
                 timer.stop()
                 msg_box.accept()
-                self.execute_system_shutdown()
+                self.execute_system_shutdown(action)
             else:
-                msg_box.setText(f"All downloads and extractions completed.\n\nSystem will shut down in {countdown} seconds.")
+                msg_box.setText(f"All downloads and extractions completed.\n\nSystem will {action.lower()} in {countdown} seconds.")
 
         timer.timeout.connect(update_timer)
         timer.start(1000)
@@ -1326,15 +1340,28 @@ class MainWindow(QMainWindow):
         timer.stop()
         self.shutdown_dialog_active = False
 
-    def execute_system_shutdown(self):
+    def execute_system_shutdown(self, action="Shutdown"):
         try:
             if sys.platform == "win32":
-                os.system("shutdown /s /t 0")
+                if action == "Sleep":
+                    os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+                elif action == "Hibernate":
+                    os.system("shutdown /h")
+                else:
+                    os.system("shutdown /s /t 0")
             elif sys.platform == "darwin":
-                os.system("sudo shutdown -h now")
+                if action == "Sleep":
+                    os.system("pmset sleepnow")
+                else:
+                    os.system("sudo shutdown -h now")
             else:
-                os.system("shutdown -h now")
+                if action == "Sleep":
+                    os.system("systemctl suspend")
+                elif action == "Hibernate":
+                    os.system("systemctl hibernate")
+                else:
+                    os.system("shutdown -h now")
         except Exception as e:
-            logger.error(f"Failed to execute system shutdown: {e}")
+            logger.error(f"Failed to execute system {action.lower()}: {e}")
 
 

@@ -1,7 +1,7 @@
 import os
 import qtawesome as qta
 from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QPushButton, QCheckBox
+    QWidget, QHBoxLayout, QPushButton, QCheckBox, QComboBox
 )
 from PyQt6.QtCore import pyqtSignal
 
@@ -18,6 +18,7 @@ class ActionBarWidget(QWidget):
     clear_completed_clicked = pyqtSignal()
     extract_changed = pyqtSignal(bool)
     shutdown_changed = pyqtSignal(bool)
+    shutdown_action_changed = pyqtSignal(str)
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -120,10 +121,16 @@ class ActionBarWidget(QWidget):
         self.extract_checkbox.stateChanged.connect(lambda: self.extract_changed.emit(self.extract_checkbox.isChecked()))
         action_layout.addWidget(self.extract_checkbox)
 
-        self.shutdown_checkbox = QCheckBox("Auto-shutdown when done")
+        self.shutdown_checkbox = QCheckBox("Auto-action when done")
         self.shutdown_checkbox.setChecked(self.settings.get("auto_shutdown_on_completion", False))
         self.shutdown_checkbox.stateChanged.connect(lambda: self.shutdown_changed.emit(self.shutdown_checkbox.isChecked()))
         action_layout.addWidget(self.shutdown_checkbox)
+
+        self.shutdown_action_combo = QComboBox()
+        self.shutdown_action_combo.addItems(["Shutdown", "Sleep", "Hibernate"])
+        self.shutdown_action_combo.setCurrentText(self.settings.get("auto_shutdown_action", "Shutdown"))
+        self.shutdown_action_combo.currentTextChanged.connect(self.shutdown_action_changed.emit)
+        action_layout.addWidget(self.shutdown_action_combo)
         
         self.clear_btn = QPushButton("Clear Completed")
         self.clear_btn.setIcon(qta.icon("fa5s.broom", color=icon_color, scale_factor=icon_size / 16))
