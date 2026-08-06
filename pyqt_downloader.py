@@ -13,7 +13,12 @@ from core.settings import OLD_EXE_CLEANUP_MARKER_SUFFIX
 
 is_debug_mode = any(arg.lower() in ("-debug", "--debug") for arg in sys.argv)
 
-log_file = os.path.expanduser("~/.silverspoon.log")
+base_dir = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    base_dir = os.path.dirname(sys.executable)
+log_dir = os.path.join(base_dir, "logs")
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "silverspoon.log")
 handlers = [
     RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8')
 ]

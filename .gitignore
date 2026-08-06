@@ -29,7 +29,6 @@ Thumbs.db
 .DS_Store
 /build
 /dist
-SilverSpoon.spec
 
 # Bundled Binaries
 7z.exe
