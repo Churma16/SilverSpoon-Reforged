@@ -65,5 +65,17 @@ def setup_menu_bar(window):
     about_action.triggered.connect(window.show_about_dialog)
     help_menu.addAction(about_action)
 
+    # Legal Menu
+    legal_menu = menu_bar.addMenu("&Legal")
+    
+    privacy_action = QAction("&Privacy Policy", window)
+    privacy_action.triggered.connect(window.show_privacy_policy_dialog)
+    legal_menu.addAction(privacy_action)
+    
+    tos_action = QAction("&Terms of Service", window)
+    tos_action.triggered.connect(window.show_terms_of_service_dialog)
+    legal_menu.addAction(tos_action)
+
+
 
 

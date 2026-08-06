@@ -194,6 +194,11 @@ class SettingsDialog(QDialog):
         self.minimize_tray_checkbox.setChecked(self.current_settings.get("minimize_to_tray", False))
         layout.addRow("Minimize to System Tray on Close:", self.minimize_tray_checkbox)
 
+        # Auto Update Option
+        self.auto_update_checkbox = QCheckBox()
+        self.auto_update_checkbox.setChecked(self.current_settings.get("auto_check_updates", False))
+        layout.addRow("Automatically check for updates on startup:", self.auto_update_checkbox)
+
         # Buttons
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.reset_btn = button_box.addButton("Reset Defaults", QDialogButtonBox.ButtonRole.ResetRole)
@@ -226,6 +231,7 @@ class SettingsDialog(QDialog):
             self.skip_delete_checkbox.setChecked(False)
             self.notifications_checkbox.setChecked(True)
             self.minimize_tray_checkbox.setChecked(False)
+            self.auto_update_checkbox.setChecked(False)
             
             # Reset background invisible settings as well
             self.current_settings["column_widths"] = {}
@@ -240,7 +246,90 @@ class SettingsDialog(QDialog):
             "skip_delete_confirmation": self.skip_delete_checkbox.isChecked(),
             "enable_notifications": self.notifications_checkbox.isChecked(),
             "minimize_to_tray": self.minimize_tray_checkbox.isChecked(),
+            "auto_check_updates": self.auto_update_checkbox.isChecked(),
             "column_widths": self.current_settings.get("column_widths", {}),
             "show_warning_dialog": self.current_settings.get("show_warning_dialog", True),
             "last_update_check": self.current_settings.get("last_update_check", 0.0)
         }
+
+
+class PrivacyPolicyDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Privacy Policy - SilverSpoon")
+        self.resize(650, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        content = """# Privacy Policy
+
+**Last Updated: August 2026**
+
+Your privacy is important to us. This Privacy Policy explains how SilverSpoon Reforged handles data.
+
+## 1. No Personal Data Collection
+SilverSpoon Reforged is a local desktop client. We do **not** collect, store, or transmit your personal data, IP address, download history, or files to any third-party analytics or server operated by the developers. All operations are performed locally on your machine.
+
+## 2. Local Storage
+All application configuration settings, log files, and download history are stored locally on your device (usually in your home directory under `.silverspoon` or local system log paths). You can delete these files at any time.
+
+## 3. Third-Party Web Services
+When you use SilverSpoon Reforged to download files from third-party hosting providers (such as FuckingFast), you make direct connections to their servers. 
+- These external services may log your IP address and download behavior according to their own privacy policies.
+- SilverSpoon Reforged has no control over, and assumes no responsibility for, the privacy practices of third-party web services.
+
+## 4. Updates Check
+If enabled, the application may check for updates by making requests to the official GitHub API. This is standard behavior to fetch the latest release version metadata.
+
+## 5. Verification & Open Source Transparency
+SilverSpoon Reforged is fully open-source. You do not need to take our word for it—you can inspect, audit, or build the entire codebase yourself from our official GitHub repository to verify that no analytics, tracking, or telemetry mechanisms exist.
+"""
+        
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setMarkdown(content)
+        layout.addWidget(text_edit)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+
+class TermsOfServiceDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Terms of Service - SilverSpoon")
+        self.resize(650, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        content = """# Terms of Service
+
+**Last Updated: August 2026**
+
+By using SilverSpoon Reforged (the "Software"), you agree to be bound by these Terms of Service.
+
+## 1. License & Open Source
+The Software is licensed under the GNU General Public License v3.0 (GPLv3). You are free to use, study, modify, and redistribute the Software in accordance with the terms of the license.
+
+## 2. Disclaimer of Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## 3. Responsible Use
+You agree to use this Software only for lawful purposes. You must not use the Software to download or distribute material that violates any applicable local, national, or international laws, or infringes upon the intellectual property rights of others.
+
+## 4. Third-Party Content & Services
+The Software allows you to download files from third-party platforms.
+- You are solely responsible for ensuring your compliance with the terms of service of any third-party platforms or file-hosting sites you access using the Software.
+- The developers of the Software are not responsible for any content downloaded through the Software.
+"""
+        
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setMarkdown(content)
+        layout.addWidget(text_edit)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
