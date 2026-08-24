@@ -1,7 +1,7 @@
 import os
 import qtawesome as qta
 from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QPushButton, QCheckBox, QComboBox
+    QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox, QComboBox
 )
 from PyQt6.QtCore import pyqtSignal
 
@@ -60,8 +60,12 @@ class ActionBarWidget(QWidget):
         """
 
     def setup_ui(self):
-        action_layout = QHBoxLayout(self)
-        action_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(8)
+
+        top_layout = QHBoxLayout()
+        bottom_layout = QHBoxLayout()
 
         icon_color = "#ffffff"
         icon_size = 14
@@ -70,73 +74,78 @@ class ActionBarWidget(QWidget):
         self.select_all_btn.setIcon(qta.icon("fa5s.check-double", color=icon_color, scale_factor=icon_size / 16))
         self.select_all_btn.setStyleSheet(self._make_action_button_style("default"))
         self.select_all_btn.clicked.connect(self.select_all_clicked.emit)
-        action_layout.addWidget(self.select_all_btn)
+        top_layout.addWidget(self.select_all_btn)
         
         self.start_btn = QPushButton("Start / Resume")
         self.start_btn.setIcon(qta.icon("fa5s.play", color=icon_color, scale_factor=icon_size / 16))
         self.start_btn.setStyleSheet(self._make_action_button_style("primary"))
         self.start_btn.clicked.connect(self.start_clicked.emit)
-        action_layout.addWidget(self.start_btn)
+        top_layout.addWidget(self.start_btn)
         
         self.pause_btn = QPushButton("Pause")
         self.pause_btn.setIcon(qta.icon("fa5s.pause", color=icon_color, scale_factor=icon_size / 16))
         self.pause_btn.setStyleSheet(self._make_action_button_style("neutral"))
         self.pause_btn.clicked.connect(self.pause_clicked.emit)
-        action_layout.addWidget(self.pause_btn)
+        top_layout.addWidget(self.pause_btn)
         
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setIcon(qta.icon("fa5s.stop", color=icon_color, scale_factor=icon_size / 16))
         self.cancel_btn.setStyleSheet(self._make_action_button_style("danger"))
         self.cancel_btn.clicked.connect(self.cancel_clicked.emit)
-        action_layout.addWidget(self.cancel_btn)
+        top_layout.addWidget(self.cancel_btn)
         
         self.retry_btn = QPushButton("Retry")
         self.retry_btn.setIcon(qta.icon("fa5s.redo", color=icon_color, scale_factor=icon_size / 16))
         self.retry_btn.setStyleSheet(self._make_action_button_style("warning"))
         self.retry_btn.clicked.connect(self.retry_clicked.emit)
-        action_layout.addWidget(self.retry_btn)
+        top_layout.addWidget(self.retry_btn)
 
         self.force_redownload_btn = QPushButton("Force Redownload")
         self.force_redownload_btn.setIcon(qta.icon("fa5s.download", color=icon_color, scale_factor=icon_size / 16))
         self.force_redownload_btn.setStyleSheet(self._make_action_button_style("warning"))
         self.force_redownload_btn.clicked.connect(self.force_redownload_clicked.emit)
-        action_layout.addWidget(self.force_redownload_btn)
+        top_layout.addWidget(self.force_redownload_btn)
 
         self.copy_log_btn = QPushButton("Copy Error Details")
         self.copy_log_btn.setIcon(qta.icon("fa5s.copy", color=icon_color, scale_factor=icon_size / 16))
         self.copy_log_btn.setStyleSheet(self._make_action_button_style("neutral"))
         self.copy_log_btn.clicked.connect(self.copy_log_clicked.emit)
-        action_layout.addWidget(self.copy_log_btn)
+        top_layout.addWidget(self.copy_log_btn)
         
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setIcon(qta.icon("fa5s.trash-alt", color=icon_color, scale_factor=icon_size / 16))
         self.delete_btn.setStyleSheet(self._make_action_button_style("danger"))
         self.delete_btn.clicked.connect(self.delete_clicked.emit)
-        action_layout.addWidget(self.delete_btn)
+        top_layout.addWidget(self.delete_btn)
         
-        action_layout.addStretch()
+        top_layout.addStretch()
+        
+        bottom_layout.addStretch()
         
         self.extract_checkbox = QCheckBox("Extract after download")
         self.extract_checkbox.setChecked(self.settings.get("extract_after_download", False))
         self.extract_checkbox.stateChanged.connect(lambda: self.extract_changed.emit(self.extract_checkbox.isChecked()))
-        action_layout.addWidget(self.extract_checkbox)
+        bottom_layout.addWidget(self.extract_checkbox)
 
         self.shutdown_checkbox = QCheckBox("Auto-action when done")
         self.shutdown_checkbox.setChecked(self.settings.get("auto_shutdown_on_completion", False))
         self.shutdown_checkbox.stateChanged.connect(lambda: self.shutdown_changed.emit(self.shutdown_checkbox.isChecked()))
-        action_layout.addWidget(self.shutdown_checkbox)
+        bottom_layout.addWidget(self.shutdown_checkbox)
 
         self.shutdown_action_combo = QComboBox()
         self.shutdown_action_combo.addItems(["Shutdown", "Sleep", "Hibernate"])
         self.shutdown_action_combo.setCurrentText(self.settings.get("auto_shutdown_action", "Shutdown"))
         self.shutdown_action_combo.currentTextChanged.connect(self.shutdown_action_changed.emit)
-        action_layout.addWidget(self.shutdown_action_combo)
+        bottom_layout.addWidget(self.shutdown_action_combo)
         
         self.clear_btn = QPushButton("Clear Completed")
         self.clear_btn.setIcon(qta.icon("fa5s.broom", color=icon_color, scale_factor=icon_size / 16))
         self.clear_btn.setStyleSheet(self._make_action_button_style("default"))
         self.clear_btn.clicked.connect(self.clear_completed_clicked.emit)
-        action_layout.addWidget(self.clear_btn)
+        bottom_layout.addWidget(self.clear_btn)
+        
+        main_layout.addLayout(top_layout)
+        main_layout.addLayout(bottom_layout)
 
     def update_states(self, tasks, selected_tasks):
         has_tasks = len(tasks) > 0
