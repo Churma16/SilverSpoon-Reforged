@@ -8,6 +8,8 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 
 ## Features
 
+> Some features listed below may look familiar.
+
 ### Fork-Exclusive Features & Improvements
 
 * **SeleniumBase UC & Auto Turnstile Solver:** Integrated background browser automation to handle host verification and retrieve direct download links automatically.
