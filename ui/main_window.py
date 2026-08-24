@@ -267,6 +267,8 @@ class MainWindow(QMainWindow):
         menu.addAction("[P] Pause", self.pause_selected)
         menu.addAction("[C] Cancel", self.cancel_selected)
         menu.addSeparator()
+        menu.addAction("[O] Open Folder Location", self.open_selected_folder_location)
+        menu.addSeparator()
         menu.addAction("[R] Retry", self.retry_selected)
         menu.addAction("[F] Force Redownload", self.force_redownload_selected)
         menu.addAction("[E] Re-extract Archive", self.reextract_selected)
@@ -274,6 +276,35 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Delete", self.delete_selected)
         menu.exec(self.tree.viewport().mapToGlobal(position))
+
+    def open_selected_folder_location(self):
+        selected_tasks = self.get_selected_tasks()
+        if selected_tasks:
+            if len(selected_tasks) == 1:
+                single_task = selected_tasks[0]
+                SystemService.open_file_or_folder(single_task.filepath, single_task.save_dir)
+            else:
+                unique_directories = list(dict.fromkeys(task.save_dir for task in selected_tasks))
+                for directory_path in unique_directories[:5]:
+                    SystemService.open_directory(directory_path)
+            return
+
+        current_tree_item = self.tree.currentItem()
+        if current_tree_item:
+            if current_tree_item.parent() is None:
+                folder_name = current_tree_item.data(0, Qt.ItemDataRole.UserRole) or current_tree_item.text(0)
+                base_save_directory = os.path.abspath(self.dir_input.text())
+                target_directory = os.path.normpath(os.path.join(base_save_directory, folder_name))
+                SystemService.open_directory(target_directory)
+                return
+            else:
+                matching_task = next((task for task in self.download_controller.tasks if task.tree_item == current_tree_item), None)
+                if matching_task:
+                    SystemService.open_file_or_folder(matching_task.filepath, matching_task.save_dir)
+                    return
+
+        base_save_directory = os.path.abspath(self.dir_input.text())
+        SystemService.open_directory(base_save_directory)
 
     def sync_tasks_order_from_tree(self):
         reordered_tasks = self.tree_adapter.get_reordered_tasks()
@@ -290,6 +321,8 @@ class MainWindow(QMainWindow):
             self.delete_selected()
         elif event.key() == Qt.Key.Key_F:
             self.force_redownload_selected()
+        elif event.key() == Qt.Key.Key_O:
+            self.open_selected_folder_location()
         else:
             super().keyPressEvent(event)
 
@@ -320,6 +353,9 @@ class MainWindow(QMainWindow):
                 return True
             if event.key() == Qt.Key.Key_R:
                 self.retry_selected()
+                return True
+            if event.key() == Qt.Key.Key_O:
+                self.open_selected_folder_location()
                 return True
         return super().eventFilter(source, event)
 
