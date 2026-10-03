@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.1.0...v2.2.0) (2026-10-03)
+
+### Features
+
+* **ci:** add automated test suite and daily live bypass canary monitoring ([2524368](https://github.com/Churma16/SilverSpoon-Reforged/commit/2524368abb02457f861303c35f0f030b60df8fe6))
+
 ## [2.1.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.0.1...v2.1.0) (2026-10-03)
 
 ### Features
