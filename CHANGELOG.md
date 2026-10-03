@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.2](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.1...v2.2.2) (2026-10-03)
+
+### Bug Fixes
+
+* **extractor:** dispatch immediate fetch before Turnstile fallback to prevent false timeout ([0a028ed](https://github.com/Churma16/SilverSpoon-Reforged/commit/0a028ed2fe6760a33eac51185e71b8d687cb369c))
+
 ## [2.2.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.0...v2.2.1) (2026-10-03)
 
 ### Bug Fixes
