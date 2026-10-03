@@ -1,3 +1,5 @@
+import os
+import sys
 import time
 import logging
 import threading
@@ -59,7 +61,10 @@ class FuckingFastExtractor(BaseExtractor):
             driver = None
             try:
                 logger.info(f"Starting SeleniumBase UC driver for {link} (attempt {attempt + 1}/{max_retries})")
-                driver = Driver(uc=True, headless=True)
+                is_headless = True
+                if sys.platform != "win32" and os.environ.get("DISPLAY"):
+                    is_headless = False
+                driver = Driver(uc=True, headless=is_headless)
                 driver.set_page_load_timeout(45)
                 driver.set_script_timeout(20)
 
@@ -75,12 +80,18 @@ class FuckingFastExtractor(BaseExtractor):
 
                 turnstile_token = None
                 if has_turnstile_widget:
-                    # Poll up to TURNSTILE_TIMEOUT seconds for Turnstile to auto-solve
-                    for _ in range(_TURNSTILE_TIMEOUT_SECONDS):
+                    logger.info(f"Turnstile widget detected on page for {link}, resolving challenge...")
+                    # Poll up to TURNSTILE_TIMEOUT seconds for Turnstile to auto-solve or interact
+                    for second in range(_TURNSTILE_TIMEOUT_SECONDS):
                         time.sleep(1)
                         turnstile_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS)
                         if turnstile_token:
                             break
+                        if second in (3, 10):
+                            try:
+                                driver.uc_gui_handle_cf()
+                            except Exception as click_error:
+                                logger.debug(f"Turnstile GUI click attempt: {click_error}")
 
                     if not turnstile_token:
                         if attempt < max_retries - 1:
