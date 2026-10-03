@@ -1,0 +1,58 @@
+name: Canary - Extractor Bypass Health Check
+
+on:
+  schedule:
+    # Runs daily at 00:00 UTC (07:00 WIB / UTC+7)
+    - cron: '0 0 * * *'
+  # Allows triggering the test manually anytime from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  canary-check:
+    name: Check FuckingFast Bypass
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install System Dependencies (Xvfb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest requests
+
+      - name: Run Live Canary Bypass Test
+        env:
+          TEST_FUCKINGFAST_URL: ${{ secrets.TEST_FUCKINGFAST_URL }}
+        run: |
+          xvfb-run --auto-servernum python -m pytest tests/test_live_extractor.py -v -s
+
+      - name: Send Telegram Alert on Failure
+        if: failure()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          if [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ]; then
+            MESSAGE="%F0%9F%9A%A8 <b>SilverSpoon Canary Alert: FuckingFast Bypass Failed!</b>%0A%0A%E2%9D%8C <b>Status:</b> FAILED - The live bypass probe failed on GitHub Actions.%0ACloudflare or fuckingfast.co may have updated their bot protection or page layout.%0A%0A%F0%9F%94%97 <b>Repository:</b> ${{ github.repository }}%0A%F0%9F%9B%A0%EF%B8%8F <b>Action Run:</b> <a href=\"$RUN_URL\">View Run Log</a>"
+            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${CHAT_ID}" \
+              -d "parse_mode=HTML" \
+              -d "text=${MESSAGE}"
+          else
+            echo "Telegram credentials (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) are not configured in repository secrets."
+          fi

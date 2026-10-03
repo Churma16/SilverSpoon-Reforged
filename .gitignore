@@ -9,7 +9,7 @@
 link.txt
 
 # Temporary / Debug files
-test_*.py
+/test_*.py
 page.html
 ui_downloader.py
 *.log
