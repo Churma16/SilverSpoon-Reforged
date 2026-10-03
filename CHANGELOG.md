@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.1.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.0.1...v2.1.0) (2026-10-03)
+
+### Features
+
+* **logging:** relocate application log directory to local app folder and update gitignore ([f051b9d](https://github.com/Churma16/SilverSpoon-Reforged/commit/f051b9d6cffc67ee0441ac51cc15a393a7225a03))
+* **ui:** add configurable auto-completion action supporting Shutdown, Sleep, and Hibernate ([99a8ade](https://github.com/Churma16/SilverSpoon-Reforged/commit/99a8aded2fbe6951ef037560a4d4ef53f4aaea1f))
+* **ui:** add modal closing dialog and graceful application shutdown ([4daeaa8](https://github.com/Churma16/SilverSpoon-Reforged/commit/4daeaa82fa9598e03e54c025dadd9c93c68a656b))
+* **ui:** add Open Folder Location context menu action and 'O' shortcut handler ([cfce062](https://github.com/Churma16/SilverSpoon-Reforged/commit/cfce062fd7ca5d7aa00e9681afa46c5fb97b80c8))
+* **ui:** add Privacy Policy and Terms of Service dialogs to top menu bar ([230e12f](https://github.com/Churma16/SilverSpoon-Reforged/commit/230e12f7049de9290bf3aaa95441ec8c1d947ba5))
+* **ui:** add qtawesome icons to action bar ([df6457b](https://github.com/Churma16/SilverSpoon-Reforged/commit/df6457bde14c42951b40925ba85cf24ddb0bba99))
+* **windows:** set explicit AppUserModelID ([20e290b](https://github.com/Churma16/SilverSpoon-Reforged/commit/20e290b1617ac0ce8e0ba9181aea78f44698317a))
+
+### Bug Fixes
+
+* **extractor:** handle optional Turnstile challenge on fuckingfast ([5bf16ed](https://github.com/Churma16/SilverSpoon-Reforged/commit/5bf16edb0a6946f530be507b214d05d92a83f16f))
+
 ## [2.0.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.0.0...v2.0.1) (2026-08-04)
 ## [2.0.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v1.7.1...v2.0.0) (2026-08-04)
 
