@@ -5,6 +5,14 @@ from core.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 
+# JS snippet to check if a Cloudflare Turnstile widget or response input is present
+_HAS_TURNSTILE_JS = """
+var inputElement = document.querySelector('[name="cf-turnstile-response"]');
+var widgetElement = document.querySelector('.cf-turnstile');
+var turnstileIframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+return (inputElement !== null || widgetElement !== null || turnstileIframe !== null);
+"""
+
 # JS snippet to read the Turnstile token auto-solved by the SeleniumBase UC driver
 _GET_TURNSTILE_TOKEN_JS = """
 var inp = document.querySelector('[name="cf-turnstile-response"]');
@@ -18,7 +26,7 @@ _TURNSTILE_TIMEOUT_SECONDS = 25
 class FuckingFastExtractor(BaseExtractor):
     """
     Extracts direct download URLs from fuckingfast.co using a headless
-    SeleniumBase UC browser that auto-solves Cloudflare Turnstile.
+    SeleniumBase UC browser that handles Cloudflare clearance and optional Turnstile challenges.
 
     A single driver instance is reused across all extractions, protected
     by a threading lock to prevent concurrent navigation conflicts.
@@ -58,27 +66,38 @@ class FuckingFastExtractor(BaseExtractor):
                 # Navigate to the file page; UC mode handles the Cloudflare cf_clearance challenge
                 driver.uc_open_with_reconnect(link, reconnect_time=5)
 
-                # Poll up to TURNSTILE_TIMEOUT seconds for Turnstile to auto-solve
+                # Check whether Turnstile widget is present on the page
+                has_turnstile_widget = driver.execute_script(_HAS_TURNSTILE_JS)
+                if not has_turnstile_widget:
+                    # Brief wait to ensure widget is not being asynchronously injected
+                    time.sleep(2)
+                    has_turnstile_widget = driver.execute_script(_HAS_TURNSTILE_JS)
+
                 turnstile_token = None
-                for _ in range(_TURNSTILE_TIMEOUT_SECONDS):
-                    time.sleep(1)
-                    turnstile_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS)
-                    if turnstile_token:
-                        break
+                if has_turnstile_widget:
+                    # Poll up to TURNSTILE_TIMEOUT seconds for Turnstile to auto-solve
+                    for _ in range(_TURNSTILE_TIMEOUT_SECONDS):
+                        time.sleep(1)
+                        turnstile_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS)
+                        if turnstile_token:
+                            break
 
-                if not turnstile_token:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"Turnstile timeout on attempt {attempt + 1} for {link}. Retrying...")
-                        continue
-                    return None, "Timed out waiting for Cloudflare Turnstile to solve."
+                    if not turnstile_token:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Turnstile timeout on attempt {attempt + 1} for {link}. Retrying...")
+                            continue
+                        return None, "Timed out waiting for Cloudflare Turnstile to solve."
 
-                logger.info(f"Turnstile token acquired for {link}")
+                    logger.info(f"Turnstile token acquired for {link}")
+                else:
+                    logger.info(f"No Turnstile widget detected on page for {link}, proceeding directly with download request")
+                    turnstile_token = ""
 
                 # Execute the POST from inside the browser (full session context, correct Origin)
                 post_path = f"/f/{file_id}/go"
                 fetch_js = """
                 var callback = arguments[arguments.length - 1];
-                var token = arguments[0];
+                var token = arguments[0] || '';
                 var postPath = arguments[1];
                 var body = new URLSearchParams({'cf-turnstile-response': token});
                 fetch(postPath, {
