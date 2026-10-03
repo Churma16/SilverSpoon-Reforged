@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.1](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.0...v2.2.1) (2026-10-03)
+
+### Bug Fixes
+
+* **extractor:** actively solve Turnstile challenges and support Xvfb environments ([0ee7932](https://github.com/Churma16/SilverSpoon-Reforged/commit/0ee7932a64765d2ca73b6f0210d7782b7f2e04f7))
+
 ## [2.2.0](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.1.0...v2.2.0) (2026-10-03)
 
 ### Features
