@@ -11,8 +11,7 @@ logger = logging.getLogger(__name__)
 _HAS_TURNSTILE_JS = """
 var inputElement = document.querySelector('[name="cf-turnstile-response"]');
 var widgetElement = document.querySelector('.cf-turnstile');
-var turnstileIframe = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
-return (inputElement !== null || widgetElement !== null || turnstileIframe !== null);
+return (inputElement !== null || widgetElement !== null);
 """
 
 # JS snippet to read the Turnstile token auto-solved by the SeleniumBase UC driver
@@ -71,40 +70,7 @@ class FuckingFastExtractor(BaseExtractor):
                 # Navigate to the file page; UC mode handles the Cloudflare cf_clearance challenge
                 driver.uc_open_with_reconnect(link, reconnect_time=5)
 
-                # Check whether Turnstile widget is present on the page
-                has_turnstile_widget = driver.execute_script(_HAS_TURNSTILE_JS)
-                if not has_turnstile_widget:
-                    # Brief wait to ensure widget is not being asynchronously injected
-                    time.sleep(2)
-                    has_turnstile_widget = driver.execute_script(_HAS_TURNSTILE_JS)
-
-                turnstile_token = None
-                if has_turnstile_widget:
-                    logger.info(f"Turnstile widget detected on page for {link}, resolving challenge...")
-                    # Poll up to TURNSTILE_TIMEOUT seconds for Turnstile to auto-solve or interact
-                    for second in range(_TURNSTILE_TIMEOUT_SECONDS):
-                        time.sleep(1)
-                        turnstile_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS)
-                        if turnstile_token:
-                            break
-                        if second in (3, 10):
-                            try:
-                                driver.uc_gui_handle_cf()
-                            except Exception as click_error:
-                                logger.debug(f"Turnstile GUI click attempt: {click_error}")
-
-                    if not turnstile_token:
-                        if attempt < max_retries - 1:
-                            logger.warning(f"Turnstile timeout on attempt {attempt + 1} for {link}. Retrying...")
-                            continue
-                        return None, "Timed out waiting for Cloudflare Turnstile to solve."
-
-                    logger.info(f"Turnstile token acquired for {link}")
-                else:
-                    logger.info(f"No Turnstile widget detected on page for {link}, proceeding directly with download request")
-                    turnstile_token = ""
-
-                # Execute the POST from inside the browser (full session context, correct Origin)
+                # Define in-browser fetch execution snippet
                 post_path = f"/f/{file_id}/go"
                 fetch_js = """
                 var callback = arguments[arguments.length - 1];
@@ -133,15 +99,40 @@ class FuckingFastExtractor(BaseExtractor):
                   .catch(err => callback({error: err.toString()}));
                 """
 
-                result = driver.execute_async_script(fetch_js, turnstile_token, post_path)
-
-                if result.get('error'):
-                    logger.error(f"In-browser fetch error for {link}: {result['error']}")
-                    return None, f"In-browser fetch error: {result['error']}"
+                # Attempt 1: Check if token is already present or try with session cookies immediately
+                initial_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS) or ""
+                result = driver.execute_async_script(fetch_js, initial_token, post_path)
 
                 if result.get('redirectUrl'):
                     logger.info(f"Successfully extracted direct URL for {link}")
                     return result['redirectUrl'], None
+
+                # Attempt 2: If no redirect was returned, check whether Turnstile challenge requires solving
+                has_turnstile_widget = driver.execute_script(_HAS_TURNSTILE_JS)
+                if has_turnstile_widget:
+                    logger.info(f"Turnstile widget detected on page for {link}, resolving challenge...")
+                    turnstile_token = None
+                    for second in range(_TURNSTILE_TIMEOUT_SECONDS):
+                        time.sleep(1)
+                        turnstile_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS)
+                        if turnstile_token:
+                            break
+                        if second in (3, 10):
+                            try:
+                                driver.uc_gui_handle_cf()
+                            except Exception as click_error:
+                                logger.debug(f"Turnstile GUI click attempt: {click_error}")
+
+                    if turnstile_token:
+                        retry_result = driver.execute_async_script(fetch_js, turnstile_token, post_path)
+                        if retry_result.get('redirectUrl'):
+                            logger.info(f"Successfully extracted direct URL for {link} after Turnstile challenge")
+                            return retry_result['redirectUrl'], None
+                        result = retry_result
+
+                if result.get('error'):
+                    logger.error(f"In-browser fetch error for {link}: {result['error']}")
+                    return None, f"In-browser fetch error: {result['error']}"
 
                 status = result.get('status')
                 body = result.get('body', '')
