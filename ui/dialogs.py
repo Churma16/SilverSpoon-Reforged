@@ -3,7 +3,7 @@ import sys
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QFormLayout, QSpinBox, QDialogButtonBox,
-    QFileDialog, QMessageBox, QTextEdit
+    QFileDialog, QMessageBox, QTextEdit, QProgressBar
 )
 from PyQt6.QtCore import Qt
 
@@ -332,4 +332,59 @@ The Software allows you to download files from third-party platforms.
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
+
+
+class ClosingDialog(QDialog):
+    """Modal loader shown when the application is shutting down to prevent spamming close actions."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setFixedSize(360, 110)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1a2230;
+                border: 2px solid #34495e;
+                border-radius: 8px;
+            }
+            QLabel#TitleLabel {
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QLabel#StatusLabel {
+                color: #a0aec0;
+                font-size: 11px;
+            }
+            QProgressBar {
+                background-color: #0f141c;
+                border: 1px solid #2d3748;
+                border-radius: 4px;
+                height: 6px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #27ae60;
+                border-radius: 3px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(10)
+
+        title_label = QLabel("Closing SilverSpoon...", self)
+        title_label.setObjectName("TitleLabel")
+        layout.addWidget(title_label)
+
+        status_label = QLabel("Saving tasks and cleaning up background services...", self)
+        status_label.setObjectName("StatusLabel")
+        layout.addWidget(status_label)
+
+        progress_bar = QProgressBar(self)
+        progress_bar.setRange(0, 0)
+        progress_bar.setTextVisible(False)
+        layout.addWidget(progress_bar)
+
 

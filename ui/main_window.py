@@ -27,7 +27,8 @@ from ui.url_input_bar import UrlInputBarWidget
 from ui.menus import setup_menu_bar
 from ui.dialogs import (
     WarningDialog, SettingsDialog, ChangelogDialog,
-    LogViewerDialog, PrivacyPolicyDialog, TermsOfServiceDialog
+    LogViewerDialog, PrivacyPolicyDialog, TermsOfServiceDialog,
+    ClosingDialog
 )
 from ui.widgets import SessionStatsWidget, ReorderableTreeWidget
 
@@ -146,20 +147,48 @@ class MainWindow(QMainWindow):
             self.toggle_visibility()
 
     def force_quit(self):
+        if getattr(self, '_is_shutting_down', False):
+            return
+        self._is_shutting_down = True
+        self.setEnabled(False)
+
+        closing_dialog = ClosingDialog(self)
+        closing_dialog.show()
+        QApplication.processEvents()
+
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
         self.download_controller.stop_download_manager()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
         self.download_controller.trigger_history_save()
         save_settings(self.settings)
+        closing_dialog.close()
         logging.shutdown()
         QApplication.quit()
 
     def closeEvent(self, event):
+        if getattr(self, '_is_shutting_down', False):
+            event.ignore()
+            return
+
         if self.settings.get("minimize_to_tray", False) and hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
             self.hide()
             self.send_notification("SilverSpoon", "SilverSpoon is running in the background system tray.")
             event.ignore()
             return
+
+        self._is_shutting_down = True
+        self.setEnabled(False)
+
+        # Show modal closing dialog to prevent close button spam
+        closing_dialog = ClosingDialog(self)
+        closing_dialog.show()
+        QApplication.processEvents()
+
+        # Stop UI update timer
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
 
         # Save tasks history
         self.download_controller.trigger_history_save()
@@ -174,8 +203,14 @@ class MainWindow(QMainWindow):
         # Stop background services
         self.download_controller.stop_download_manager()
 
+        # Hide system tray icon to ensure Qt event loop exits cleanly
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.hide()
+
+        closing_dialog.close()
         logging.shutdown()
         event.accept()
+        QApplication.quit()
 
     # ---------------------------------------------------------
     # UI Setup & Layout

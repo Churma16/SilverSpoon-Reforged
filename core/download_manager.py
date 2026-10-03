@@ -28,6 +28,10 @@ class DownloadManager:
 
     def stop(self):
         self.is_running = False
+        for task in self.tasks:
+            if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION):
+                task.pause_flag = True
+
 
     def _download_manager_loop(self, extract_check_callback=None):
         while self.is_running:
@@ -156,7 +160,7 @@ class DownloadManager:
                 with open(task.filepath, mode) as f:
                     for chunk in resp.iter_content(chunk_size=8192*8):
 
-                            if task.pause_flag:
+                            if not self.is_running or task.pause_flag:
                                 task.status = TaskStatus.PAUSED
                                 task.speed = 0
                                 logger.info(f"Download paused during stream: {task.link}")

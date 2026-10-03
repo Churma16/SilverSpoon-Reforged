@@ -81,11 +81,17 @@ class DownloadController(QObject):
         """Stops background download manager and closes network sessions."""
         if hasattr(self, 'download_manager') and self.download_manager:
             self.download_manager.stop()
+        if hasattr(self, 'scraper') and self.scraper:
+            try:
+                self.scraper.close()
+            except Exception as close_error:
+                logger.warning(f"Error closing scraper session: {close_error}")
         if hasattr(self, 'extractor') and hasattr(self.extractor, 'close'):
             try:
                 self.extractor.close()
             except Exception as close_error:
                 logger.warning(f"Error closing extractor: {close_error}")
+
 
     def load_initial_history(self) -> List[DownloadTask]:
         """Loads persistent task history and registers into controller."""
