@@ -5,16 +5,16 @@ from core.extractors.fuckingfast import FuckingFastExtractor
 
 
 @pytest.mark.live
-def test_fuckingfast_live_bypass_and_extraction():
-    """Live canary probe verifying that Cloudflare Turnstile bypass and direct link
+def test_fuckingfast_live_extraction():
+    """Live probe verifying that direct link extraction on fuckingfast.co
 
-    extraction on fuckingfast.co remain functional against the live host.
+    remains functional and compatible with the host service.
     """
     target_link_url = os.environ.get("TEST_FUCKINGFAST_URL")
 
     if not target_link_url:
         pytest.skip(
-            "TEST_FUCKINGFAST_URL environment variable is not configured. Skipping live canary probe."
+            "TEST_FUCKINGFAST_URL environment variable is not configured. Skipping live probe."
         )
 
     link_extractor = FuckingFastExtractor()
@@ -23,7 +23,7 @@ def test_fuckingfast_live_bypass_and_extraction():
         direct_download_url, extraction_error_message = link_extractor.extract_direct_url(target_link_url)
 
         assert extraction_error_message is None, (
-            f"Bypass failed with error message: {extraction_error_message}"
+            f"Extraction failed with error message: {extraction_error_message}"
         )
         assert direct_download_url is not None, (
             "Extractor returned None for direct download URL."

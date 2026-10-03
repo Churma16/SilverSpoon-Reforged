@@ -1,4 +1,4 @@
-name: Canary - Extractor Bypass Health Check
+name: Extractor Health Check
 
 on:
   schedule:
@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  canary-check:
-    name: Check FuckingFast Bypass
+  health-check:
+    name: Check Link Resolver
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -34,7 +34,7 @@ jobs:
           pip install -r requirements.txt
           pip install pytest requests
 
-      - name: Run Live Canary Bypass Test
+      - name: Run Extractor Health Check
         env:
           TEST_FUCKINGFAST_URL: ${{ secrets.TEST_FUCKINGFAST_URL }}
         run: |
@@ -48,7 +48,7 @@ jobs:
           RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         run: |
           if [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ]; then
-            MESSAGE="%F0%9F%9A%A8 <b>SilverSpoon Canary Alert: FuckingFast Bypass Failed!</b>%0A%0A%E2%9D%8C <b>Status:</b> FAILED - The live bypass probe failed on GitHub Actions.%0ACloudflare or fuckingfast.co may have updated their bot protection or page layout.%0A%0A%F0%9F%94%97 <b>Repository:</b> ${{ github.repository }}%0A%F0%9F%9B%A0%EF%B8%8F <b>Action Run:</b> <a href=\"$RUN_URL\">View Run Log</a>"
+            MESSAGE="%F0%9F%9A%A8 <b>SilverSpoon Alert: Link Resolver Failed!</b>%0A%0A%E2%9D%8C <b>Status:</b> FAILED - The live link extraction check failed on GitHub Actions.%0AThe file host may have updated their download page structure or response layout.%0A%0A%F0%9F%94%97 <b>Repository:</b> ${{ github.repository }}%0A%F0%9F%9B%A0%EF%B8%8F <b>Action Run:</b> <a href=\"$RUN_URL\">View Run Log</a>"
             curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
               -d "chat_id=${CHAT_ID}" \
               -d "parse_mode=HTML" \
