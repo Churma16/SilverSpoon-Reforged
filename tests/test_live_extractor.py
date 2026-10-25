@@ -107,13 +107,59 @@ def test_fuckingfast_live_extraction():
 
         # Evaluate final outcome across all candidate URLs
         if not successful_extraction_results:
+            summary_file_path = "canary_error_summary.txt"
             if len(expired_link_records) == len(candidate_urls):
+                failure_reason = (
+                    f"All {len(candidate_urls)} candidate links returned HTTP 404 (Files Expired / Deleted on host)."
+                )
+                formatted_details = "\n".join(
+                    f"- {url}: HTTP 404 Not Found" for url, _ in expired_link_records
+                )
+                recommended_action = (
+                    "Update the test candidate URLs in GitHub Secrets (TEST_FUCKINGFAST_URLS)."
+                )
+                summary_content = (
+                    f"<b>Reason:</b>\n{failure_reason}\n\n"
+                    f"<b>Details:</b>\n{formatted_details}\n\n"
+                    f"<b>Recommended Action:</b>\n{recommended_action}"
+                )
+                try:
+                    with open(summary_file_path, "w", encoding="utf-8") as summary_file:
+                        summary_file.write(summary_content)
+                except Exception as file_write_error:
+                    logger.warning(f"Failed writing error summary to {summary_file_path}: {file_write_error}")
+
                 pytest.fail(
                     f"All {len(candidate_urls)} candidate URLs returned HTTP 404 (file expired or deleted on host). "
                     f"Please update the test URLs secret in repository settings. "
                     f"Expired links: {[url for url, _ in expired_link_records]}"
                 )
             else:
+                failure_reason = (
+                    f"Live extraction failed on {len(extraction_failure_records)} candidate(s) due to resolver/bypass error."
+                )
+                detail_entries = [
+                    f"- {url}: {error}" for url, error in extraction_failure_records
+                ]
+                if expired_link_records:
+                    detail_entries.extend(
+                        [f"- {url}: HTTP 404 Not Found (expired)" for url, _ in expired_link_records]
+                    )
+                formatted_details = "\n".join(detail_entries)
+                recommended_action = (
+                    "Investigate Cloudflare Turnstile challenge solving or file host DOM/API changes."
+                )
+                summary_content = (
+                    f"<b>Reason:</b>\n{failure_reason}\n\n"
+                    f"<b>Details:</b>\n{formatted_details}\n\n"
+                    f"<b>Recommended Action:</b>\n{recommended_action}"
+                )
+                try:
+                    with open(summary_file_path, "w", encoding="utf-8") as summary_file:
+                        summary_file.write(summary_content)
+                except Exception as file_write_error:
+                    logger.warning(f"Failed writing error summary to {summary_file_path}: {file_write_error}")
+
                 formatted_failure_details = "\n".join(
                     f"- {url}: {error}" for url, error in extraction_failure_records
                 )
