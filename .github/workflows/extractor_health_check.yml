@@ -37,6 +37,7 @@ jobs:
       - name: Run Extractor Health Check
         env:
           TEST_FUCKINGFAST_URL: ${{ secrets.TEST_FUCKINGFAST_URL }}
+          TEST_FUCKINGFAST_URLS: ${{ secrets.TEST_FUCKINGFAST_URLS }}
         run: |
           xvfb-run --auto-servernum python -m pytest tests/test_live_extractor.py -v -s
 
