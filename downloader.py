@@ -54,17 +54,27 @@ class DownloadManager:
             head_req = self.scraper.head(dl_url)
             total_size = int(head_req.headers.get('content-length', 0))
             
-            if initial_size > 0 and initial_size == total_size:
+            if initial_size > 0 and total_size > 0 and initial_size == total_size:
                 with self.lock:
                     print(f"[*] {filename} already fully downloaded.")
                     self.completed_links += 1
                 return True
+
+            if total_size > 0 and initial_size > total_size:
+                initial_size = 0
                 
             if initial_size > 0:
                 resume_header = {'Range': f'bytes={initial_size}-'}
                 mode = 'ab'
 
-            with self.scraper.get(dl_url, stream=True, headers=resume_header) as r:
+            r = self.scraper.get(dl_url, stream=True, headers=resume_header)
+            if r.status_code == 416 and initial_size > 0:
+                initial_size = 0
+                resume_header = {}
+                mode = 'wb'
+                r = self.scraper.get(dl_url, stream=True, headers=resume_header)
+
+            with r:
                 if r.status_code not in (200, 206):
                     with self.lock:
                         print(f"[!] Failed to download {filename}, HTTP {r.status_code}")
