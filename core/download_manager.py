@@ -118,13 +118,21 @@ class DownloadManager:
                 total_size = int(head_req.headers.get('content-length', 0))
                 task.total_bytes = total_size
                 
-                if initial_size > 0 and initial_size == total_size:
+                if initial_size > 0 and total_size > 0 and initial_size == total_size:
                     task.downloaded_bytes = total_size
                     task.progress = 100
                     task.status = TaskStatus.FINISHED
                     task.error_message = ""
                     logger.info(f"Task completed based on content length match: {task.filepath}")
+                    self.trigger_history_save_callback()
                     return
+
+                if total_size > 0 and initial_size > total_size:
+                    logger.warning(
+                        f"Local file size ({initial_size} bytes) exceeds remote size ({total_size} bytes) for "
+                        f"{task.filepath}. Resetting download from 0."
+                    )
+                    initial_size = 0
                     
                 resume_header = {}
                 mode = 'wb'
@@ -134,6 +142,16 @@ class DownloadManager:
                     logger.info(f"Resuming download from byte offset {initial_size} for {task.filepath}")
                     
                 resp = self.scraper.get(dl_url, stream=True, headers=resume_header)
+                if resp.status_code == 416 and initial_size > 0:
+                    logger.warning(
+                        f"Server returned 416 Range Not Satisfiable for offset {initial_size}. "
+                        f"Restarting download from byte 0 for {task.filepath}"
+                    )
+                    initial_size = 0
+                    resume_header = {}
+                    mode = 'wb'
+                    resp = self.scraper.get(dl_url, stream=True, headers=resume_header)
+
                 if resp.status_code not in (200, 206):
                     task.status = TaskStatus.FAILED
                     if resp.status_code == 403:
