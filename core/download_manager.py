@@ -99,6 +99,7 @@ class DownloadManager:
             task.error_message = ""
             logger.info(f"Downloading stream from: {dl_url}")
             
+            resp = None
             try:
                 if not os.path.exists(task.save_dir):
                     try:
@@ -147,6 +148,10 @@ class DownloadManager:
                         f"Server returned 416 Range Not Satisfiable for offset {initial_size}. "
                         f"Restarting download from byte 0 for {task.filepath}"
                     )
+                    try:
+                        resp.close()
+                    except Exception:
+                        pass
                     initial_size = 0
                     resume_header = {}
                     mode = 'wb'
@@ -221,6 +226,12 @@ class DownloadManager:
                     task.status = TaskStatus.FAILED
                     task.error_message = f"Download failed. {format_error_message(e)}"
                     self.trigger_history_save_callback()
+            finally:
+                if resp is not None:
+                    try:
+                        resp.close()
+                    except Exception:
+                        pass
         finally:
             if task.started_at:
                 task.elapsed_seconds += time.time() - task.started_at
