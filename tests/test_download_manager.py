@@ -8,19 +8,27 @@ from core.types import TaskStatus
 
 
 class MockResponse:
-    def __init__(self, status_code=200, headers=None, content=b""):
+    def __init__(self, status_code=200, headers=None, content=b"", chunks=None):
         self.status_code = status_code
         self.headers = headers or {}
-        self.content = content
+        if chunks is not None:
+            self.chunks = chunks
+        else:
+            self.chunks = [content] if content else [b""]
+        self.closed = False
 
     def iter_content(self, chunk_size=65536):
-        yield self.content
+        for chunk in self.chunks:
+            yield chunk
+
+    def close(self):
+        self.closed = True
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+        self.close()
 
 
 class TestDownloadResumptionAnd416Recovery(unittest.TestCase):
@@ -50,17 +58,14 @@ class TestDownloadResumptionAnd416Recovery(unittest.TestCase):
     def test_oversized_local_file_resets_to_byte_zero(self):
         task = DownloadTask("https://fuckingfast.co/test#sample.bin", self.save_dir, folder_name="batch")
         os.makedirs(task.save_dir, exist_ok=True)
-        # Create an oversized local file (2000 bytes)
         with open(task.filepath, "wb") as f:
             f.write(b"x" * 2000)
 
         self.extractor.extract_direct_url.return_value = ("https://direct.example.com/sample.bin", None)
-        # Remote content-length is 1000 bytes (smaller than local 2000 bytes)
         head_response = MagicMock()
         head_response.headers = {"content-length": "1000"}
         self.scraper.head.return_value = head_response
 
-        # GET should be called without Range header (bytes 0-), returning 200
         get_response = MockResponse(status_code=200, headers={"content-length": "1000"}, content=b"y" * 1000)
         self.scraper.get.return_value = get_response
 
@@ -68,15 +73,13 @@ class TestDownloadResumptionAnd416Recovery(unittest.TestCase):
 
         self.assertEqual(task.status, TaskStatus.FINISHED)
         self.assertEqual(task.progress, 100)
-        # Scraper GET must have been called with empty headers (not Range)
         self.scraper.get.assert_called_with("https://direct.example.com/sample.bin", stream=True, headers={})
-        # The file on disk should now be overwritten to 1000 bytes
         self.assertEqual(os.path.getsize(task.filepath), 1000)
+        self.assertTrue(get_response.closed)
 
     def test_http_416_recovery_falls_back_to_byte_zero(self):
         task = DownloadTask("https://fuckingfast.co/test#sample416.bin", self.save_dir, folder_name="batch")
         os.makedirs(task.save_dir, exist_ok=True)
-        # Create partial local file (500 bytes)
         with open(task.filepath, "wb") as f:
             f.write(b"x" * 500)
 
@@ -85,7 +88,6 @@ class TestDownloadResumptionAnd416Recovery(unittest.TestCase):
         head_response.headers = {"content-length": "1000"}
         self.scraper.head.return_value = head_response
 
-        # First GET with Range returns 416, fallback GET without Range returns 200
         resp_416 = MockResponse(status_code=416)
         resp_200 = MockResponse(status_code=200, headers={"content-length": "1000"}, content=b"z" * 1000)
         self.scraper.get.side_effect = [resp_416, resp_200]
@@ -95,10 +97,10 @@ class TestDownloadResumptionAnd416Recovery(unittest.TestCase):
         self.assertEqual(task.status, TaskStatus.FINISHED)
         self.assertEqual(task.progress, 100)
         self.assertEqual(self.scraper.get.call_count, 2)
-        # Second call must be without Range header
         self.assertEqual(self.scraper.get.call_args_list[1][1]["headers"], {})
-        # The file on disk should be written from 0 (1000 bytes)
         self.assertEqual(os.path.getsize(task.filepath), 1000)
+        self.assertTrue(resp_416.closed)
+        self.assertTrue(resp_200.closed)
 
     def test_valid_partial_download_resumes_with_range_header(self):
         task = DownloadTask("https://fuckingfast.co/test#resume.bin", self.save_dir, folder_name="batch")
@@ -123,6 +125,53 @@ class TestDownloadResumptionAnd416Recovery(unittest.TestCase):
             headers={"Range": "bytes=400-"}
         )
         self.assertEqual(os.path.getsize(task.filepath), 1000)
+        self.assertTrue(resp_206.closed)
+
+    def test_response_closed_when_download_paused_midway(self):
+        task = DownloadTask("https://fuckingfast.co/test#pause.bin", self.save_dir, folder_name="batch")
+        os.makedirs(task.save_dir, exist_ok=True)
+
+        self.extractor.extract_direct_url.return_value = ("https://direct.example.com/pause.bin", None)
+        head_response = MagicMock()
+        head_response.headers = {"content-length": "1000"}
+        self.scraper.head.return_value = head_response
+
+        class PausingResponse(MockResponse):
+            def iter_content(self, chunk_size=65536):
+                yield b"part1"
+                task.pause_flag = True
+                yield b"part2"
+
+        resp = PausingResponse(status_code=200, headers={"content-length": "1000"})
+        self.scraper.get.return_value = resp
+
+        self.manager.download_worker(task)
+
+        self.assertEqual(task.status, TaskStatus.PAUSED)
+        self.assertTrue(resp.closed)
+
+    def test_response_closed_when_download_cancelled_midway(self):
+        task = DownloadTask("https://fuckingfast.co/test#cancel.bin", self.save_dir, folder_name="batch")
+        os.makedirs(task.save_dir, exist_ok=True)
+
+        self.extractor.extract_direct_url.return_value = ("https://direct.example.com/cancel.bin", None)
+        head_response = MagicMock()
+        head_response.headers = {"content-length": "1000"}
+        self.scraper.head.return_value = head_response
+
+        class CancellingResponse(MockResponse):
+            def iter_content(self, chunk_size=65536):
+                yield b"part1"
+                task.cancel_flag = True
+                yield b"part2"
+
+        resp = CancellingResponse(status_code=200, headers={"content-length": "1000"})
+        self.scraper.get.return_value = resp
+
+        self.manager.download_worker(task)
+
+        self.assertEqual(task.status, TaskStatus.CANCELLED)
+        self.assertTrue(resp.closed)
 
 
 if __name__ == "__main__":

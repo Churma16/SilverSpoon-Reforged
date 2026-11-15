@@ -69,6 +69,10 @@ class DownloadManager:
 
             r = self.scraper.get(dl_url, stream=True, headers=resume_header)
             if r.status_code == 416 and initial_size > 0:
+                try:
+                    r.close()
+                except Exception:
+                    pass
                 initial_size = 0
                 resume_header = {}
                 mode = 'wb'
