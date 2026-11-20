@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.10](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.9...v2.2.10) (2026-11-20)
+
 ## [2.2.9](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.8...v2.2.9) (2026-11-20)
 
 ### Bug Fixes
