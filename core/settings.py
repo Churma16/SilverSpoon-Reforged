@@ -70,8 +70,17 @@ def load_settings():
 
 def save_settings(settings):
     settings_path = get_settings_path()
+    temp_path = settings_path + ".tmp"
     try:
-        with open(settings_path, 'w', encoding='utf-8') as f:
+        with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, settings_path)
     except Exception as e:
         print(f"Failed to save settings: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass

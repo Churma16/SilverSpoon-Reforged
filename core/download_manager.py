@@ -28,29 +28,34 @@ class DownloadManager:
 
     def stop(self):
         self.is_running = False
-        for task in self.tasks:
-            if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION):
+        for task in list(self.tasks):
+            if task.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION) or getattr(task, 'is_active_worker', False):
                 task.pause_flag = True
 
 
     def _download_manager_loop(self, extract_check_callback=None):
         while self.is_running:
-            active = sum(1 for t in self.tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION))
-            if active < self.max_workers:
-                for task in self.tasks:
-                    if task.status == TaskStatus.IN_QUEUE:
-                        task.status = TaskStatus.CONNECTING
-                        logger.info(f"Queued task started download worker: {task.link}")
-                        threading.Thread(target=self.download_worker, args=(task,), daemon=True).start()
-                        active += 1
-                        if active >= self.max_workers:
-                            break
-            
-            if extract_check_callback and self.is_running:
-                try:
-                    extract_check_callback()
-                except (RuntimeError, AttributeError):
-                    pass
+            try:
+                task_snapshot = list(self.tasks)
+                active = sum(1 for t in task_snapshot if t.status in (TaskStatus.DOWNLOADING, TaskStatus.CONNECTING, TaskStatus.SOLVING_SESSION) or getattr(t, 'is_active_worker', False))
+                if active < self.max_workers:
+                    for task in task_snapshot:
+                        if task.status == TaskStatus.IN_QUEUE and not getattr(task, 'is_active_worker', False):
+                            task.status = TaskStatus.CONNECTING
+                            task.is_active_worker = True
+                            logger.info(f"Queued task started download worker: {task.link}")
+                            threading.Thread(target=self.download_worker, args=(task,), daemon=True).start()
+                            active += 1
+                            if active >= self.max_workers:
+                                break
+                
+                if extract_check_callback and self.is_running:
+                    try:
+                        extract_check_callback()
+                    except (RuntimeError, AttributeError):
+                        pass
+            except Exception as loop_error:
+                logger.error(f"Error in download manager loop: {loop_error}", exc_info=True)
                 
             time.sleep(1)
 
@@ -63,6 +68,7 @@ class DownloadManager:
         return direct_link
 
     def download_worker(self, task):
+        task.is_active_worker = True
         task.started_at = time.time()
         try:
             # Quick check: If file is already 100% downloaded on disk, finish immediately without network call
@@ -114,8 +120,11 @@ class DownloadManager:
                 if os.path.exists(task.filepath):
                     initial_size = os.path.getsize(task.filepath)
                     
-                head_req = self.scraper.head(dl_url)
-                total_size = int(head_req.headers.get('content-length', 0))
+                head_req = self.scraper.head(dl_url, timeout=(10, 30))
+                try:
+                    total_size = int(head_req.headers.get('content-length', 0))
+                except (ValueError, TypeError):
+                    total_size = 0
                 task.total_bytes = total_size
                 
                 if initial_size > 0 and initial_size == total_size:
@@ -133,7 +142,14 @@ class DownloadManager:
                     mode = 'ab'
                     logger.info(f"Resuming download from byte offset {initial_size} for {task.filepath}")
                     
-                resp = self.scraper.get(dl_url, stream=True, headers=resume_header)
+                resp = self.scraper.get(dl_url, stream=True, headers=resume_header, timeout=(10, 30))
+                if resp.status_code == 416 and initial_size > 0:
+                    # Requested range not satisfiable; reset and redownload full file
+                    logger.warning(f"HTTP 416 on resume for {task.filepath}; restarting from 0")
+                    initial_size = 0
+                    mode = 'wb'
+                    resp = self.scraper.get(dl_url, stream=True, timeout=(10, 30))
+                
                 if resp.status_code not in (200, 206):
                     task.status = TaskStatus.FAILED
                     if resp.status_code == 403:
@@ -190,6 +206,9 @@ class DownloadManager:
                                     
                                 self.rate_limiter.consume(size, self.settings.get("download_speed_limit", 0))
                     
+                    if task.total_bytes > 0 and task.downloaded_bytes < task.total_bytes:
+                        raise IOError(f"Incomplete download: {task.downloaded_bytes}/{task.total_bytes} bytes received")
+                    
                     task.progress = 100
                     task.speed = 0
                     task.status = TaskStatus.FINISHED
@@ -204,6 +223,8 @@ class DownloadManager:
                     task.error_message = f"Download failed. {format_error_message(e)}"
                     self.trigger_history_save_callback()
         finally:
+            task.is_active_worker = False
+            task.speed = 0.0
             if task.started_at:
                 task.elapsed_seconds += time.time() - task.started_at
                 task.started_at = None

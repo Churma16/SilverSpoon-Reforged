@@ -20,8 +20,18 @@ def load_history():
 
 def save_history(tasks):
     history_path = get_history_path()
+    temp_path = history_path + ".tmp"
     try:
-        with open(history_path, 'w', encoding='utf-8') as f:
-            json.dump([t.to_dict() for t in tasks], f, indent=4)
+        tasks_snapshot = list(tasks)
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump([t.to_dict() for t in tasks_snapshot], f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, history_path)
     except Exception as e:
         print(f"Failed to save history: {e}")
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass

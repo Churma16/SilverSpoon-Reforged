@@ -93,7 +93,7 @@ class ExtractionManager:
                 elif shutil.which('7z'):
                     cmd = [os.path.abspath(shutil.which('7z')), 'x', first_vol, f'-o{save_dir}', '-y']
                 elif os.path.exists(installed_winrar):
-                    cmd = [installed_winrar, 'x', '-y', first_vol, f'{save_dir}\\']
+                    cmd = [installed_winrar, 'x', '-y', first_vol, save_dir.rstrip('\\')]
             else:
                 if shutil.which('7z'):
                     cmd = ['7z', 'x', first_vol, f'-o{save_dir}', '-y']
@@ -116,8 +116,9 @@ class ExtractionManager:
                 check=True,
                 creationflags=creationflags,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                timeout=1800
             )
             
             for t in tasks_in_folder:
@@ -126,11 +127,22 @@ class ExtractionManager:
             logger.info(f"Extraction completed successfully for folder: {folder_name}")
             self.trigger_history_save_callback()
                 
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Extraction error (subprocess): {e}", exc_info=True)
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Extraction timed out after 1800s for folder {folder_name}: {e}", exc_info=True)
             for t in tasks_in_folder:
                 t.status = TaskStatus.EXTRACT_ERROR
-                t.error_message = f"Extractor failed with exit code {e.returncode}. The archive may be corrupt, incomplete, or password-protected."
+                t.error_message = "Extraction timed out after 30 minutes. The archive may be corrupt or waiting for a password."
+            if folder_name in self.extracted_folders:
+                self.extracted_folders.remove(folder_name)
+            self.trigger_history_save_callback()
+        except subprocess.CalledProcessError as e:
+            stderr_msg = e.stderr.decode('utf-8', errors='ignore').strip() if e.stderr else ""
+            last_line = stderr_msg.splitlines()[-1] if stderr_msg else ""
+            error_detail = f" ({last_line})" if last_line else ""
+            logger.error(f"Extraction error (subprocess): {e} {stderr_msg}", exc_info=True)
+            for t in tasks_in_folder:
+                t.status = TaskStatus.EXTRACT_ERROR
+                t.error_message = f"Extractor failed with exit code {e.returncode}{error_detail}. The archive may be corrupt, incomplete, or password-protected."
             if folder_name in self.extracted_folders:
                 self.extracted_folders.remove(folder_name)
             self.trigger_history_save_callback()
