@@ -14,7 +14,6 @@ It supports multi-threaded download management, automatic extraction via 7-Zip, 
 | File / Folder Path | Module / Role | Primary Responsibilities |
 |---|---|---|
 | [pyqt_downloader.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/pyqt_downloader.py) | GUI Entry Point | Application startup script, old EXE cleanup handling, splash screen display (`QSplashScreen`), and `QApplication` event loop initialization. |
-| [downloader.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/downloader.py) | CLI Application | Standalone command-line runner featuring `DownloadManager` and `GlobalRateLimiter` for headless environments. |
 | [update_logic.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/update_logic.py) | Auto-Updater Subsystem | Background update checker thread (`UpdateCheckerThread`), release extraction (`extract_and_verify_update`), EXE replacement (`perform_exe_replacement`), and restart trampoline script (`launch_restart_script`). |
 | [core/](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/core/) | Core Logic Package | Business logic for download task models, thread managers, history management, rate limiting, enums, and persistent settings. |
 | ├── [core/download_task.py](file:///d:/Document/Coding/POS_Furnitur/App/SilverSpoon/core/download_task.py) | Task Model | `DownloadTask` class encapsulating link, status, byte progress, save directory, tree item binding, and serialization. |

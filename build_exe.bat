@@ -7,6 +7,7 @@ pyinstaller --clean SilverSpoon.spec
 if %ERRORLEVEL% neq 0 (
     echo.
     echo [ERROR] Build failed with exit code %ERRORLEVEL%!
+    pause
     exit /b %ERRORLEVEL%
 )
 
