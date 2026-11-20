@@ -128,6 +128,14 @@ class ReorderableTreeWidget(QTreeWidget):
 
     def dragMoveEvent(self, event):
         target_item = self.itemAt(event.position().toPoint())
+        selected = self.selectedItems()
+
+        # If dragging a top-level batch folder, prevent dropping inside another batch folder
+        is_dragging_batch = any(i.parent() is None for i in selected)
+        if is_dragging_batch and target_item is not None and target_item.parent() is not None:
+            event.ignore()
+            return
+
         # Prevent dropping directly onto any item (only allow reordering above/below or on viewport)
         if target_item is not None and self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
             event.ignore()
@@ -140,29 +148,18 @@ class ReorderableTreeWidget(QTreeWidget):
         self.order_changed.emit()
 
     def normalize_structure(self):
-        items_to_move = []
+        batches_to_promote = []
         for top_index in range(self.topLevelItemCount()):
             top_item = self.topLevelItem(top_index)
-            self._flatten_nested_items(top_item, items_to_move)
+            for child_index in range(top_item.childCount()):
+                child_item = top_item.child(child_index)
+                if child_item.childCount() > 0:
+                    batches_to_promote.append(child_item)
 
-        for item, target_parent in items_to_move:
-            current_parent = item.parent()
+        for batch_item in batches_to_promote:
+            current_parent = batch_item.parent()
             if current_parent:
-                current_parent.removeChild(item)
-            if target_parent is None:
-                self.addTopLevelItem(item)
-            else:
-                target_parent.addChild(item)
-
-    def _flatten_nested_items(self, item, items_to_move):
-        for child_index in range(item.childCount()):
-            child_item = item.child(child_index)
-            # If a child item has sub-children, it is a batch folder dropped inside another item
-            if child_item.childCount() > 0:
-                items_to_move.append((child_item, None))
-            elif item.parent() is not None:
-                # If child_item is nested deeper than level 1, move it up to top level parent
-                items_to_move.append((child_item, item.parent()))
-            self._flatten_nested_items(child_item, items_to_move)
+                current_parent.removeChild(batch_item)
+            self.addTopLevelItem(batch_item)
 
 
