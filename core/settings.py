@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import threading
 
 def _load_current_version():
     possible_version_file_paths = []
@@ -70,7 +71,7 @@ def load_settings():
 
 def save_settings(settings):
     settings_path = get_settings_path()
-    temp_path = settings_path + ".tmp"
+    temp_path = f"{settings_path}.{os.getpid()}_{threading.get_ident()}.tmp"
     try:
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=4)

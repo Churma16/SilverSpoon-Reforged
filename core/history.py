@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 from core.download_task import DownloadTask
 
 def get_history_path():
@@ -20,7 +21,7 @@ def load_history():
 
 def save_history(tasks):
     history_path = get_history_path()
-    temp_path = history_path + ".tmp"
+    temp_path = f"{history_path}.{os.getpid()}_{threading.get_ident()}.tmp"
     try:
         tasks_snapshot = list(tasks)
         with open(temp_path, 'w', encoding='utf-8') as f:

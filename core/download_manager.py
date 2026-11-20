@@ -85,7 +85,11 @@ class DownloadManager:
             logger.info(f"Solving Session for task: {task.link}")
             dl_url = self.get_direct_link(task)
             if not dl_url:
-                if not task.cancel_flag and not task.pause_flag:
+                if task.cancel_flag:
+                    task.status = TaskStatus.CANCELLED
+                elif task.pause_flag:
+                    task.status = TaskStatus.PAUSED
+                else:
                     task.status = TaskStatus.FAILED
                     if not task.error_message:
                         task.error_message = "Could not get the direct download link."

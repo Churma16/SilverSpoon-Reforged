@@ -93,7 +93,8 @@ class ExtractionManager:
                 elif shutil.which('7z'):
                     cmd = [os.path.abspath(shutil.which('7z')), 'x', first_vol, f'-o{save_dir}', '-y']
                 elif os.path.exists(installed_winrar):
-                    cmd = [installed_winrar, 'x', '-y', first_vol, save_dir.rstrip('\\')]
+                    stripped_dest = save_dir.rstrip('\\/')
+                    cmd = [installed_winrar, 'x', '-y', first_vol, f"{stripped_dest}/"]
             else:
                 if shutil.which('7z'):
                     cmd = ['7z', 'x', first_vol, f'-o{save_dir}', '-y']
