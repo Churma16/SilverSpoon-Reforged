@@ -365,12 +365,12 @@ def test_download_worker_invokes_rate_limiter_and_session_lock(tmp_path):
 
     download_manager_instance.download_worker(download_task_instance)
 
-    # Verify rate limiter and session callbacks were invoked per chunk
+    # Verify rate limiter was invoked per chunk for responsiveness, and session lock callback was batched
     assert mock_rate_limiter_instance.consume.call_count == 2
     mock_rate_limiter_instance.consume.assert_any_call(1024, 512)
 
-    assert mock_session_bytes_callback.call_count == 2
-    mock_session_bytes_callback.assert_any_call(1024)
+    assert mock_session_bytes_callback.call_count == 1
+    mock_session_bytes_callback.assert_called_once_with(2048)
 
     assert download_task_instance.status == TaskStatus.FINISHED
     assert download_task_instance.downloaded_bytes == 2048
@@ -519,3 +519,314 @@ def test_rate_limiter_multithreaded_concurrency():
         thread.join(timeout=2.0)
 
     assert len(execution_errors) == 0
+
+
+@pytest.mark.unit
+def test_download_worker_batches_writes_and_session_lock_callback(tmp_path):
+    target_filename = "Batched_Write_File.bin"
+    destination_file_path = str(tmp_path / target_filename)
+
+    download_task_instance = DownloadTask(
+        f"https://fuckingfast.co/c7o9muwfdksh#{target_filename}",
+        str(tmp_path)
+    )
+    download_task_instance.filepath = destination_file_path
+
+    mock_extractor_client = MagicMock()
+    mock_extractor_client.extract_direct_url.return_value = ("https://cdn.example.com/batched.bin", None)
+
+    # 16 chunks of 64 KB = 1048576 bytes (1 MB)
+    chunk_size = 64 * 1024
+    chunks_list = [b"X" * chunk_size for _ in range(16)]
+    total_data_bytes = chunk_size * 16
+
+    mock_head_response = MagicMock()
+    mock_head_response.headers = {"content-length": str(total_data_bytes)}
+
+    mock_get_response = MagicMock()
+    mock_get_response.status_code = 200
+    mock_get_response.headers = {"content-length": str(total_data_bytes)}
+    mock_get_response.iter_content.return_value = chunks_list
+
+    mock_scraper_client = MagicMock()
+    mock_scraper_client.head.return_value = mock_head_response
+    mock_scraper_client.get.return_value = mock_get_response
+    mock_rate_limiter_instance = MagicMock()
+    mock_session_bytes_callback = MagicMock()
+
+    download_manager_instance = DownloadManager(
+        tasks=[download_task_instance],
+        max_workers=1,
+        rate_limiter=mock_rate_limiter_instance,
+        scraper=mock_scraper_client,
+        extractor=mock_extractor_client,
+        settings={"download_speed_limit": 0, "write_buffer_size": 512 * 1024},
+        session_bytes_lock_callback=mock_session_bytes_callback,
+        trigger_history_save_callback=MagicMock()
+    )
+    download_manager_instance.is_running = True
+
+    download_manager_instance.download_worker(download_task_instance)
+
+    # Rate limiter consumed 16 times (for each 64 KB chunk)
+    assert mock_rate_limiter_instance.consume.call_count == 16
+
+    # Session bytes callback batched every 512 KB: exactly 2 calls of 512 KB each
+    assert mock_session_bytes_callback.call_count == 2
+    mock_session_bytes_callback.assert_any_call(512 * 1024)
+
+    assert download_task_instance.status == TaskStatus.FINISHED
+    assert os.path.getsize(destination_file_path) == total_data_bytes
+
+
+@pytest.mark.unit
+def test_download_worker_flushes_buffer_on_pause(tmp_path):
+    target_filename = "Paused_Stream_File.bin"
+    destination_file_path = str(tmp_path / target_filename)
+
+    download_task_instance = DownloadTask(
+        f"https://fuckingfast.co/c7o9muwfdksh#{target_filename}",
+        str(tmp_path)
+    )
+    download_task_instance.filepath = destination_file_path
+
+    mock_extractor_client = MagicMock()
+    mock_extractor_client.extract_direct_url.return_value = ("https://cdn.example.com/paused.bin", None)
+
+    # 3 chunks of 64 KB = 192 KB (less than 512 KB buffer threshold)
+    chunk_size = 64 * 1024
+    chunk_data = b"P" * chunk_size
+
+    def chunk_generator():
+        for chunk_index in range(5):
+            if chunk_index == 3:
+                download_task_instance.pause_flag = True
+            yield chunk_data
+
+    mock_head_response = MagicMock()
+    mock_head_response.headers = {"content-length": str(chunk_size * 5)}
+
+    mock_get_response = MagicMock()
+    mock_get_response.status_code = 200
+    mock_get_response.headers = {"content-length": str(chunk_size * 5)}
+    mock_get_response.iter_content.return_value = chunk_generator()
+
+    mock_scraper_client = MagicMock()
+    mock_scraper_client.head.return_value = mock_head_response
+    mock_scraper_client.get.return_value = mock_get_response
+    mock_session_bytes_callback = MagicMock()
+
+    download_manager_instance = DownloadManager(
+        tasks=[download_task_instance],
+        max_workers=1,
+        rate_limiter=MagicMock(),
+        scraper=mock_scraper_client,
+        extractor=mock_extractor_client,
+        settings={"download_speed_limit": 0, "write_buffer_size": 512 * 1024},
+        session_bytes_lock_callback=mock_session_bytes_callback,
+        trigger_history_save_callback=MagicMock()
+    )
+    download_manager_instance.is_running = True
+
+    download_manager_instance.download_worker(download_task_instance)
+
+    assert download_task_instance.status == TaskStatus.PAUSED
+    # Exactly 3 chunks delivered before pause was handled
+    assert download_task_instance.downloaded_bytes == chunk_size * 3
+    # Buffer was flushed to disk despite being below 512 KB threshold
+    assert os.path.getsize(destination_file_path) == chunk_size * 3
+    assert mock_session_bytes_callback.call_count == 1
+    mock_session_bytes_callback.assert_called_once_with(chunk_size * 3)
+
+
+@pytest.mark.unit
+def test_download_worker_flushes_buffer_on_cancel(tmp_path):
+    target_filename = "Cancelled_Stream_File.bin"
+    destination_file_path = str(tmp_path / target_filename)
+
+    download_task_instance = DownloadTask(
+        f"https://fuckingfast.co/c7o9muwfdksh#{target_filename}",
+        str(tmp_path)
+    )
+    download_task_instance.filepath = destination_file_path
+
+    mock_extractor_client = MagicMock()
+    mock_extractor_client.extract_direct_url.return_value = ("https://cdn.example.com/cancel.bin", None)
+
+    chunk_size = 64 * 1024
+    chunk_data = b"C" * chunk_size
+
+    def chunk_generator():
+        for chunk_index in range(4):
+            if chunk_index == 2:
+                download_task_instance.cancel_flag = True
+            yield chunk_data
+
+    mock_head_response = MagicMock()
+    mock_head_response.headers = {"content-length": str(chunk_size * 4)}
+
+    mock_get_response = MagicMock()
+    mock_get_response.status_code = 200
+    mock_get_response.headers = {"content-length": str(chunk_size * 4)}
+    mock_get_response.iter_content.return_value = chunk_generator()
+
+    mock_scraper_client = MagicMock()
+    mock_scraper_client.head.return_value = mock_head_response
+    mock_scraper_client.get.return_value = mock_get_response
+    mock_session_bytes_callback = MagicMock()
+
+    download_manager_instance = DownloadManager(
+        tasks=[download_task_instance],
+        max_workers=1,
+        rate_limiter=MagicMock(),
+        scraper=mock_scraper_client,
+        extractor=mock_extractor_client,
+        settings={"download_speed_limit": 0, "write_buffer_size": 512 * 1024},
+        session_bytes_lock_callback=mock_session_bytes_callback,
+        trigger_history_save_callback=MagicMock()
+    )
+    download_manager_instance.is_running = True
+
+    download_manager_instance.download_worker(download_task_instance)
+
+    assert download_task_instance.status == TaskStatus.CANCELLED
+    assert download_task_instance.downloaded_bytes == chunk_size * 2
+    assert os.path.getsize(destination_file_path) == chunk_size * 2
+    assert mock_session_bytes_callback.call_count == 1
+    mock_session_bytes_callback.assert_called_once_with(chunk_size * 2)
+
+
+@pytest.mark.unit
+def test_download_worker_flushes_buffer_on_stream_error(tmp_path):
+    target_filename = "Stream_Error_File.bin"
+    destination_file_path = str(tmp_path / target_filename)
+
+    download_task_instance = DownloadTask(
+        f"https://fuckingfast.co/c7o9muwfdksh#{target_filename}",
+        str(tmp_path)
+    )
+    download_task_instance.filepath = destination_file_path
+
+    mock_extractor_client = MagicMock()
+    mock_extractor_client.extract_direct_url.return_value = ("https://cdn.example.com/err.bin", None)
+
+    chunk_size = 64 * 1024
+    chunk_data = b"E" * chunk_size
+
+    def error_chunk_generator():
+        yield chunk_data
+        yield chunk_data
+        raise ConnectionResetError("Connection reset by peer mid-stream")
+
+    mock_head_response = MagicMock()
+    mock_head_response.headers = {"content-length": str(chunk_size * 5)}
+
+    mock_get_response = MagicMock()
+    mock_get_response.status_code = 200
+    mock_get_response.headers = {"content-length": str(chunk_size * 5)}
+    mock_get_response.iter_content.return_value = error_chunk_generator()
+
+    mock_scraper_client = MagicMock()
+    mock_scraper_client.head.return_value = mock_head_response
+    mock_scraper_client.get.return_value = mock_get_response
+    mock_session_bytes_callback = MagicMock()
+
+    download_manager_instance = DownloadManager(
+        tasks=[download_task_instance],
+        max_workers=1,
+        rate_limiter=MagicMock(),
+        scraper=mock_scraper_client,
+        extractor=mock_extractor_client,
+        settings={"download_speed_limit": 0, "write_buffer_size": 512 * 1024},
+        session_bytes_lock_callback=mock_session_bytes_callback,
+        trigger_history_save_callback=MagicMock()
+    )
+    download_manager_instance.is_running = True
+
+    download_manager_instance.download_worker(download_task_instance)
+
+    assert download_task_instance.status == TaskStatus.FAILED
+    assert "Connection was reset" in download_task_instance.error_message
+    # Flushed 2 chunks before exception was raised
+    assert os.path.getsize(destination_file_path) == chunk_size * 2
+    assert mock_session_bytes_callback.call_count == 1
+    mock_session_bytes_callback.assert_called_once_with(chunk_size * 2)
+
+
+@pytest.mark.unit
+def test_download_worker_ema_speed_calculation(tmp_path, monkeypatch):
+    target_filename = "Ema_Speed_File.bin"
+    destination_file_path = str(tmp_path / target_filename)
+
+    download_task_instance = DownloadTask(
+        f"https://fuckingfast.co/c7o9muwfdksh#{target_filename}",
+        str(tmp_path)
+    )
+    download_task_instance.filepath = destination_file_path
+
+    mock_extractor_client = MagicMock()
+    mock_extractor_client.extract_direct_url.return_value = ("https://cdn.example.com/speed.bin", None)
+
+    # 2 intervals:
+    # Chunk 1: 1 MB transferred, clock advances by 0.5s -> instantaneous = 2.0 MB/s
+    # Chunk 2: 0.2 MB transferred, clock advances by 0.5s -> instantaneous = 0.4 MB/s
+    chunk_1 = b"1" * (1024 * 1024)
+    chunk_2 = b"2" * int(0.2 * 1024 * 1024)
+    total_data_size = len(chunk_1) + len(chunk_2)
+
+    current_simulated_time = [1000.0]
+
+    def mock_time():
+        return current_simulated_time[0]
+
+    def mock_generator():
+        # Advance time by 0.5s before yielding chunk 1
+        current_simulated_time[0] += 0.5
+        yield chunk_1
+        # Advance time by 0.5s before yielding chunk 2
+        current_simulated_time[0] += 0.5
+        yield chunk_2
+
+    monkeypatch.setattr(time, "time", mock_time)
+
+    mock_head_response = MagicMock()
+    mock_head_response.headers = {"content-length": str(total_data_size)}
+
+    mock_get_response = MagicMock()
+    mock_get_response.status_code = 200
+    mock_get_response.headers = {"content-length": str(total_data_size)}
+    mock_get_response.iter_content.return_value = mock_generator()
+
+    mock_scraper_client = MagicMock()
+    mock_scraper_client.head.return_value = mock_head_response
+    mock_scraper_client.get.return_value = mock_get_response
+
+    download_manager_instance = DownloadManager(
+        tasks=[download_task_instance],
+        max_workers=1,
+        rate_limiter=MagicMock(),
+        scraper=mock_scraper_client,
+        extractor=mock_extractor_client,
+        settings={"download_speed_limit": 0, "speed_ema_alpha": 0.3},
+        session_bytes_lock_callback=MagicMock(),
+        trigger_history_save_callback=MagicMock()
+    )
+    download_manager_instance.is_running = True
+
+    speeds_observed = []
+
+    def track_speed_after_chunk(size, limit):
+        speeds_observed.append(download_task_instance.speed)
+
+    download_manager_instance.rate_limiter.consume = MagicMock(side_effect=track_speed_after_chunk)
+
+    download_manager_instance.download_worker(download_task_instance)
+
+    assert len(speeds_observed) == 2
+    # After chunk 1: instantaneous speed = 2.0 MB/s, initial sample sets speed = 2.0 MB/s
+    assert pytest.approx(speeds_observed[0], 0.001) == 2.0
+
+    # After chunk 2: instantaneous speed = 0.4 MB/s
+    # EMA: 0.3 * 0.4 + 0.7 * 2.0 = 0.12 + 1.40 = 1.52 MB/s
+    expected_ema_speed = 0.3 * 0.4 + 0.7 * 2.0
+    assert pytest.approx(speeds_observed[1], 0.001) == expected_ema_speed

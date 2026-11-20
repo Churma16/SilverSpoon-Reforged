@@ -57,7 +57,7 @@ def test_speed_calculation_accumulates_interval_chunks_issue_6():
 
 @pytest.mark.unit
 def test_speed_tracker_lifecycle():
-    tracker = SpeedTracker(interval=0.5)
+    tracker = SpeedTracker(interval=0.5, alpha=0.3)
     base_time = 1000.0
     tracker.last_time = base_time
 
@@ -70,19 +70,93 @@ def test_speed_tracker_lifecycle():
     assert speed_early == 0.0
 
     # Once interval elapsed (0.5s elapsed, 500 KB transferred)
+    # First measurement initializes current_speed to instantaneous throughput
     speed_after_interval = tracker.get_speed(current_time=base_time + 0.5)
     expected_mb_s = (500 * 1024 / 0.5) / (1024 * 1024)
     assert pytest.approx(speed_after_interval, 0.001) == expected_mb_s
 
-    # Next call without new bytes resets speed calculation
+    # Next call without new bytes demonstrates EMA smoothing:
+    # Instead of dropping abruptly to 0.0, speed decays smoothly: (1 - alpha) * previous_speed
     speed_idle = tracker.get_speed(current_time=base_time + 1.0)
-    assert speed_idle == 0.0
+    expected_decayed_speed = (1.0 - tracker.alpha) * expected_mb_s
+    assert pytest.approx(speed_idle, 0.001) == expected_decayed_speed
+    assert 0.0 < speed_idle < speed_after_interval
 
     # Reset test
     tracker.add_bytes(1000)
-    tracker.reset()
+    tracker.reset(current_time=base_time + 1.5)
     assert tracker.accumulated_bytes == 0
     assert tracker.current_speed == 0.0
+    assert tracker.has_initial_sample is False
+
+
+@pytest.mark.unit
+def test_speed_tracker_ema_smoothing_fluctuations():
+    """Verify that EMA smoothing prevents wild speed fluctuations across intervals."""
+    tracker = SpeedTracker(interval=0.5, alpha=0.3)
+    base_time = 2000.0
+    tracker.last_time = base_time
+
+    # Interval 1: 1 MB transferred in 0.5s -> instantaneous = 2.0 MB/s
+    tracker.add_bytes(1024 * 1024)
+    speed_interval_1 = tracker.get_speed(current_time=base_time + 0.5)
+    assert pytest.approx(speed_interval_1, 0.001) == 2.0
+
+    # Interval 2: Temporary jitter, only 0.2 MB transferred in 0.5s -> instantaneous = 0.4 MB/s
+    tracker.add_bytes(int(0.2 * 1024 * 1024))
+    speed_interval_2 = tracker.get_speed(current_time=base_time + 1.0)
+    # EMA: 0.3 * 0.4 + 0.7 * 2.0 = 0.12 + 1.40 = 1.52 MB/s
+    expected_speed_2 = 0.3 * 0.4 + 0.7 * 2.0
+    assert pytest.approx(speed_interval_2, 0.001) == expected_speed_2
+    assert speed_interval_2 > 0.4  # Jitter did not cause an abrupt crash to 0.4 MB/s
+
+    # Interval 3: Sudden burst, 2.0 MB transferred in 0.5s -> instantaneous = 4.0 MB/s
+    tracker.add_bytes(2 * 1024 * 1024)
+    speed_interval_3 = tracker.get_speed(current_time=base_time + 1.5)
+    # EMA: 0.3 * 4.0 + 0.7 * 1.52 = 1.20 + 1.064 = 2.264 MB/s
+    expected_speed_3 = 0.3 * 4.0 + 0.7 * expected_speed_2
+    assert pytest.approx(speed_interval_3, 0.001) == expected_speed_3
+    assert speed_interval_3 < 4.0  # Burst did not cause an abrupt spike to 4.0 MB/s
+
+
+@pytest.mark.unit
+def test_speed_tracker_alpha_1_behaves_as_instantaneous():
+    """Verify that when alpha=1.0, SpeedTracker calculates unsmoothed instantaneous interval speed."""
+    tracker = SpeedTracker(interval=0.5, alpha=1.0)
+    base_time = 3000.0
+    tracker.last_time = base_time
+
+    # Interval 1: 1 MB transferred
+    tracker.add_bytes(1024 * 1024)
+    speed_1 = tracker.get_speed(current_time=base_time + 0.5)
+    assert pytest.approx(speed_1, 0.001) == 2.0
+
+    # Interval 2: 0 bytes transferred
+    speed_2 = tracker.get_speed(current_time=base_time + 1.0)
+    assert speed_2 == 0.0
+
+
+@pytest.mark.unit
+def test_speed_tracker_idle_decay_to_zero():
+    """Verify that idle periods decay smoothly and eventually reach 0.0."""
+    tracker = SpeedTracker(interval=0.5, alpha=0.3)
+    base_time = 4000.0
+    tracker.last_time = base_time
+
+    # Initial transfer
+    tracker.add_bytes(512 * 1024)
+    speed_initial = tracker.get_speed(current_time=base_time + 0.5)
+    assert speed_initial > 0.0
+
+    # Decay over multiple idle intervals (e.g., 25 intervals)
+    current_time = base_time + 0.5
+    for _ in range(25):
+        current_time += 0.5
+        speed_idle = tracker.get_speed(current_time=current_time)
+
+    # After sufficient idle decay, speed snaps cleanly to 0.0
+    assert speed_idle == 0.0
+    assert tracker.has_initial_sample is False
 
 
 @pytest.mark.unit

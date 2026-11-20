@@ -7,6 +7,10 @@ from utils.formatters import format_error_message
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_WRITE_BUFFER_SIZE = 512 * 1024  # 512 KB in-memory chunk buffer
+DEFAULT_SPEED_EMA_ALPHA = 0.3  # Exponential Moving Average smoothing factor
+
+
 class DownloadManager:
     def __init__(self, tasks, max_workers, rate_limiter, scraper, extractor, settings, session_bytes_lock_callback, trigger_history_save_callback):
         self.tasks = tasks
@@ -20,6 +24,9 @@ class DownloadManager:
         
         self.manager_thread = None
         self.is_running = False
+
+        self.write_buffer_size = self.settings.get("write_buffer_size", DEFAULT_WRITE_BUFFER_SIZE) if self.settings else DEFAULT_WRITE_BUFFER_SIZE
+        self.speed_ema_alpha = self.settings.get("speed_ema_alpha", DEFAULT_SPEED_EMA_ALPHA) if self.settings else DEFAULT_SPEED_EMA_ALPHA
 
     def start(self, extract_check_callback=None):
         self.is_running = True
@@ -176,49 +183,87 @@ class DownloadManager:
                     
                 last_time = time.time()
                 bytes_since_last = 0
+                has_initial_speed_sample = False
                 
                 with open(task.filepath, mode) as f:
-                    for chunk in resp.iter_content(chunk_size=8192*8):
+                    write_buffer = []
+                    buffered_bytes_count = 0
 
+                    def flush_write_buffer():
+                        nonlocal buffered_bytes_count
+                        if write_buffer:
+                            payload_to_write = b"".join(write_buffer)
+                            f.write(payload_to_write)
+                            f.flush()
+                            write_buffer.clear()
+                            flushed_size = buffered_bytes_count
+                            buffered_bytes_count = 0
+                            if self.session_bytes_lock_callback and flushed_size > 0:
+                                self.session_bytes_lock_callback(flushed_size)
+
+                    try:
+                        for chunk in resp.iter_content(chunk_size=8192 * 8):
                             if not self.is_running or task.pause_flag:
+                                flush_write_buffer()
                                 task.status = TaskStatus.PAUSED
-                                task.speed = 0
+                                task.speed = 0.0
                                 logger.info(f"Download paused during stream: {task.link}")
                                 return
                             if task.cancel_flag:
+                                flush_write_buffer()
                                 task.status = TaskStatus.CANCELLED
-                                task.speed = 0
+                                task.speed = 0.0
                                 logger.info(f"Download cancelled during stream: {task.link}")
                                 return
                                 
                             if chunk:
-                                f.write(chunk)
-                                size = len(chunk)
-                                task.downloaded_bytes += size
-                                bytes_since_last += size
-                                
-                                if self.session_bytes_lock_callback:
-                                    self.session_bytes_lock_callback(size)
-                                
+                                chunk_size = len(chunk)
+                                task.downloaded_bytes += chunk_size
+                                bytes_since_last += chunk_size
+
+                                if task.total_bytes > 0:
+                                    task.progress = (task.downloaded_bytes / task.total_bytes) * 100.0
+
+                                write_buffer.append(chunk)
+                                buffered_bytes_count += chunk_size
+
+                                if buffered_bytes_count >= self.write_buffer_size:
+                                    flush_write_buffer()
+
                                 now = time.time()
-                                if now - last_time > 0.5:
-                                    task.speed = (bytes_since_last / (now - last_time)) / (1024*1024)
-                                    if task.total_bytes > 0:
-                                        task.progress = (task.downloaded_bytes / task.total_bytes) * 100
+                                elapsed_interval = now - last_time
+                                if elapsed_interval >= 0.5:
+                                    instantaneous_speed = (bytes_since_last / elapsed_interval) / (1024 * 1024)
+                                    if not has_initial_speed_sample:
+                                        if instantaneous_speed > 0.0:
+                                            task.speed = instantaneous_speed
+                                            has_initial_speed_sample = True
+                                        else:
+                                            task.speed = 0.0
+                                    else:
+                                        task.speed = (self.speed_ema_alpha * instantaneous_speed) + ((1.0 - self.speed_ema_alpha) * task.speed)
+                                        if task.speed < 0.001 and instantaneous_speed == 0.0:
+                                            task.speed = 0.0
+                                            has_initial_speed_sample = False
                                     last_time = now
                                     bytes_since_last = 0
                                     
-                                self.rate_limiter.consume(size, self.settings.get("download_speed_limit", 0))
-                    
-                    if task.total_bytes > 0 and task.downloaded_bytes < task.total_bytes:
-                        raise IOError(f"Incomplete download: {task.downloaded_bytes}/{task.total_bytes} bytes received")
-                    
-                    task.progress = 100
-                    task.speed = 0
-                    task.status = TaskStatus.FINISHED
-                    task.error_message = ""
-                    logger.info(f"Download finished successfully: {task.filepath}")
-                    self.trigger_history_save_callback()
+                                self.rate_limiter.consume(chunk_size, self.settings.get("download_speed_limit", 0))
+
+                        # Stream finished; flush any remaining buffered data
+                        flush_write_buffer()
+
+                        if task.total_bytes > 0 and task.downloaded_bytes < task.total_bytes:
+                            raise IOError(f"Incomplete download: {task.downloaded_bytes}/{task.total_bytes} bytes received")
+                        
+                        task.progress = 100.0
+                        task.speed = 0.0
+                        task.status = TaskStatus.FINISHED
+                        task.error_message = ""
+                        logger.info(f"Download finished successfully: {task.filepath}")
+                        self.trigger_history_save_callback()
+                    finally:
+                        flush_write_buffer()
                     
             except Exception as e:
                 logger.error(f"Download worker error for task {task.link}: {e}", exc_info=True)

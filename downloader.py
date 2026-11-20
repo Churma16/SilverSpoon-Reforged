@@ -25,13 +25,19 @@ def calculate_speed(bytes_count: int, elapsed_seconds: float) -> float:
 
 
 class SpeedTracker:
-    """Tracks elapsed time and accumulated byte counts across download chunks."""
+    """Tracks elapsed time and accumulated byte counts across download chunks,
 
-    def __init__(self, interval: float = 0.5):
-        self.interval = interval
+    applying Exponential Moving Average (EMA) smoothing to prevent volatile
+    speed fluctuations across sampling intervals.
+    """
+
+    def __init__(self, interval: float = 0.5, alpha: float = 0.3):
+        self.interval = max(0.001, float(interval))
+        self.alpha = max(0.0, min(1.0, float(alpha)))
         self.accumulated_bytes = 0
         self.last_time = time.time()
         self.current_speed = 0.0
+        self.has_initial_sample = False
         self.lock = threading.Lock()
 
     def add_bytes(self, size: int) -> None:
@@ -40,22 +46,35 @@ class SpeedTracker:
             self.accumulated_bytes += size
 
     def get_speed(self, current_time: Optional[float] = None) -> float:
-        """Compute current speed in MB/s if interval has passed and reset accumulator."""
+        """Compute current smoothed speed in MB/s using EMA if interval has passed."""
         with self.lock:
-            now = time.time() if current_time is None else current_time
-            elapsed = now - self.last_time
-            if elapsed >= self.interval:
-                self.current_speed = calculate_speed(self.accumulated_bytes, elapsed)
+            evaluation_time = time.time() if current_time is None else current_time
+            elapsed_seconds = evaluation_time - self.last_time
+            if elapsed_seconds >= self.interval:
+                instantaneous_speed = calculate_speed(self.accumulated_bytes, elapsed_seconds)
+                if not self.has_initial_sample:
+                    if instantaneous_speed > 0.0:
+                        self.current_speed = instantaneous_speed
+                        self.has_initial_sample = True
+                    else:
+                        self.current_speed = 0.0
+                else:
+                    self.current_speed = (self.alpha * instantaneous_speed) + ((1.0 - self.alpha) * self.current_speed)
+                    if self.current_speed < 0.001 and instantaneous_speed == 0.0:
+                        self.current_speed = 0.0
+                        self.has_initial_sample = False
+
                 self.accumulated_bytes = 0
-                self.last_time = now
+                self.last_time = evaluation_time
             return self.current_speed
 
-    def reset(self) -> None:
-        """Reset byte counter and timing."""
+    def reset(self, current_time: Optional[float] = None) -> None:
+        """Reset byte counter, timing, and smoothed speed."""
         with self.lock:
             self.accumulated_bytes = 0
-            self.last_time = time.time()
+            self.last_time = time.time() if current_time is None else current_time
             self.current_speed = 0.0
+            self.has_initial_sample = False
 
 
 class DownloadManager:
@@ -77,7 +96,7 @@ class DownloadManager:
         self.speed_limit_kb = speed_limit_kb
         self.output_dir = output_dir or os.getcwd()
         self.lock = threading.Lock()
-        self.speed_tracker = SpeedTracker(interval=0.5)
+        self.speed_tracker = SpeedTracker(interval=0.5, alpha=0.3)
 
         # Parse links from list or file
         if isinstance(links_file, (list, tuple)):
