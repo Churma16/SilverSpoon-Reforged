@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QMenu, QSystemTrayIcon, QAbstractItemView, QHeaderView
 )
 from PyQt6.QtGui import QAction, QDesktopServices, QIcon
-from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent
+from PyQt6.QtCore import Qt, QTimer, QUrl, QEvent, QThread, pyqtSignal
 from curl_cffi import requests as cffi_requests
 
 from core.settings import (
@@ -33,6 +33,31 @@ from ui.dialogs import (
 from ui.widgets import SessionStatsWidget, ReorderableTreeWidget
 
 logger = logging.getLogger(__name__)
+
+
+class WebpageLinkScraperThread(QThread):
+    links_found = pyqtSignal(list)
+    scrape_failed = pyqtSignal(str)
+
+    def __init__(self, target_url, parent=None):
+        super().__init__(parent)
+        self.target_url = target_url
+
+    def run(self):
+        try:
+            scraper = cffi_requests.Session(impersonate="chrome")
+            try:
+                res = scraper.get(self.target_url, timeout=15)
+                if res.status_code == 200:
+                    page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
+                    ff_links = list(dict.fromkeys([u.rstrip('"\';>,') for u in page_ff_urls]))
+                    self.links_found.emit(ff_links)
+                else:
+                    self.scrape_failed.emit(f"Server returned HTTP {res.status_code}")
+            finally:
+                scraper.close()
+        except Exception as e:
+            self.scrape_failed.emit(str(e))
 
 
 class MainWindow(QMainWindow):
@@ -158,6 +183,8 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'timer') and self.timer.isActive():
             self.timer.stop()
+        if hasattr(self, 'scraper_thread') and self.scraper_thread.isRunning():
+            self.scraper_thread.wait(1000)
         self.download_controller.stop_download_manager()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
@@ -201,6 +228,8 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
         # Stop background services
+        if hasattr(self, 'scraper_thread') and self.scraper_thread.isRunning():
+            self.scraper_thread.wait(1000)
         self.download_controller.stop_download_manager()
 
         # Hide system tray icon to ensure Qt event loop exits cleanly
@@ -432,16 +461,22 @@ class MainWindow(QMainWindow):
 
         if not ff_links and web_urls:
             target_url = web_urls[0]
-            try:
-                scraper = cffi_requests.Session(impersonate="chrome")
-                res = scraper.get(target_url, timeout=15)
-                if res.status_code == 200:
-                    page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
-                    ff_links = list(dict.fromkeys([u.rstrip('"\';>,') for u in page_ff_urls]))
-            except Exception as e:
-                QMessageBox.critical(self, "Link Extractor Error", f"Failed to extract webpage links:\n{e}")
-                return
+            self.add_links_btn.setEnabled(False)
+            self.add_links_btn.setText("Scanning Webpage...")
+            
+            self.scraper_thread = WebpageLinkScraperThread(target_url, self)
+            self.scraper_thread.links_found.connect(self._process_extracted_links)
+            self.scraper_thread.scrape_failed.connect(lambda err: QMessageBox.critical(self, "Link Extractor Error", f"Failed to extract webpage links:\n{err}"))
+            self.scraper_thread.finished.connect(lambda: [
+                self.add_links_btn.setEnabled(True),
+                self.add_links_btn.setText("Add Links to Queue")
+            ])
+            self.scraper_thread.start()
+            return
 
+        self._process_extracted_links(ff_links)
+
+    def _process_extracted_links(self, ff_links):
         cleaned_links = list(dict.fromkeys(ff_links))
         if not cleaned_links:
             QMessageBox.warning(self, "No Valid Links", "No fuckingfast.co links were found directly or on the specified web page.")

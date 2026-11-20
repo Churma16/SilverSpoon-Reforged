@@ -1,6 +1,7 @@
 import os
 import time
 import textwrap
+import math
 from typing import List, Set, Callable, Optional, Dict
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor
@@ -203,7 +204,7 @@ class TaskTreeAdapter:
     @staticmethod
     def format_time(seconds: float) -> str:
         """Formats seconds into human-readable duration string."""
-        if seconds <= 0 or seconds == float('inf'):
+        if seconds is None or seconds <= 0 or not math.isfinite(seconds):
             return "-"
         m, s = divmod(int(seconds), 60)
         h, m = divmod(m, 60)

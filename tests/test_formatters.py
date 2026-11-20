@@ -41,3 +41,18 @@ def test_format_error_message_known_patterns():
     formatted_long = format_error_message(ValueError(long_message), max_length=50)
     assert len(formatted_long) <= 80
     assert formatted_long.endswith("...")
+
+
+@pytest.mark.unit
+def test_format_time_nan_and_boundaries():
+    import math
+    from ui.tree_adapter import TaskTreeAdapter
+
+    assert TaskTreeAdapter.format_time(0) == "-"
+    assert TaskTreeAdapter.format_time(-5) == "-"
+    assert TaskTreeAdapter.format_time(float('inf')) == "-"
+    assert TaskTreeAdapter.format_time(float('-inf')) == "-"
+    assert TaskTreeAdapter.format_time(float('nan')) == "-"
+    assert TaskTreeAdapter.format_time(45) == "45s"
+    assert TaskTreeAdapter.format_time(125) == "2m 5s"
+    assert TaskTreeAdapter.format_time(3665) == "1h 1m"
