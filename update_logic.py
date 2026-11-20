@@ -22,8 +22,8 @@ def version_key(version):
         return None
 
     major, minor, patch, suffix = match.groups()
-    # major > minor > patch; patch + suffix > patch
-    return int(major), int(minor), int(patch), bool(suffix), suffix.casefold()
+    # Stable releases (no suffix) rank higher than pre-releases of the same version
+    return int(major), int(minor), int(patch), not bool(suffix), suffix.casefold()
 
 def is_newer_version(latest_version, current_version):
     latest_key = version_key(latest_version)
@@ -53,21 +53,6 @@ class UpdateCheckerThread(QThread):
             pass
         return 0.0
 
-    def _write_last_check(self, timestamp):
-        data = {}
-        try:
-            if os.path.exists(self.settings_path):
-                with open(self.settings_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-        except Exception:
-            pass
-        data["last_update_check"] = timestamp
-        try:
-            with open(self.settings_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4)
-        except Exception:
-            pass
-        
     def run(self):
         try:
             if sys.platform != "win32" or (not hasattr(sys, "frozen") and not self.force):
@@ -98,19 +83,18 @@ class UpdateCheckerThread(QThread):
                         
                 if download_url:
                     self.update_available.emit(latest_version, data.get("body", "No changelog provided."), download_url)
-                    self._write_last_check(now)
                     self.check_finished.emit(now)
+                    return
+                elif self.force:
+                    self.error_checking.emit("Update found but release asset (.zip) is not yet available.")
                     return
                     
             if self.force:
                 self.no_update_found.emit()
                     
-            self._write_last_check(now)
             self.check_finished.emit(now)
             
         except Exception as e:
-            self._write_last_check(time.time())
-            self.check_finished.emit(time.time())
             if self.force:
                 self.error_checking.emit(str(e))
 

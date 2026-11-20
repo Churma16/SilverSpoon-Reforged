@@ -117,7 +117,7 @@ class FuckingFastExtractor(BaseExtractor):
                         turnstile_token = driver.execute_script(_GET_TURNSTILE_TOKEN_JS)
                         if turnstile_token:
                             break
-                        if second in (3, 10):
+                        if second in (3, 10) and not is_headless:
                             try:
                                 driver.uc_gui_handle_cf()
                             except Exception as click_error:

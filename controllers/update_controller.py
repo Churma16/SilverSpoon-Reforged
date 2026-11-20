@@ -46,6 +46,9 @@ class UpdateController(QObject):
 
     def check_for_updates_manually(self):
         """Manually triggers an update check with user feedback."""
+        if hasattr(self, 'manual_checker') and self.manual_checker and self.manual_checker.isRunning():
+            return
+
         self.manual_checker = UpdateCheckerThread(CURRENT_VERSION, GITHUB_REPO, get_settings_path(), force=True)
         self.manual_checker.update_available.connect(self.prompt_update)
         self.manual_checker.check_finished.connect(self.update_last_check_time)
@@ -171,7 +174,7 @@ class UpdateController(QObject):
                 cleanup_marker = current_exe + OLD_EXE_CLEANUP_MARKER_SUFFIX
                 if delete_old_exe:
                     with open(cleanup_marker, "w", encoding="utf-8") as marker:
-                        marker.write("Delete the previous executable after a successful restart.\n")
+                        marker.write(f"{old_exe_path}\n")
                 elif os.path.exists(cleanup_marker):
                     os.remove(cleanup_marker)
 
