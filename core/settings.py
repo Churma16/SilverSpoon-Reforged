@@ -58,15 +58,28 @@ def load_settings():
         "last_update_check": 0.0
     }
     settings_path = get_settings_path()
+    should_save_settings = False
+
     if os.path.exists(settings_path):
         try:
-            with open(settings_path, 'r', encoding='utf-8') as f:
-                loaded = json.load(f)
-                default_settings.update(loaded)
+            with open(settings_path, "r", encoding="utf-8") as settings_file:
+                loaded_settings = json.load(settings_file)
+                if isinstance(loaded_settings, dict):
+                    has_missing_default_keys = any(
+                        default_key not in loaded_settings for default_key in default_settings
+                    )
+                    if has_missing_default_keys:
+                        should_save_settings = True
+                    default_settings.update(loaded_settings)
+                else:
+                    should_save_settings = True
         except Exception:
-            pass
-            
-    save_settings(default_settings)
+            should_save_settings = True
+    else:
+        should_save_settings = True
+
+    if should_save_settings:
+        save_settings(default_settings)
     return default_settings
 
 def save_settings(settings):
