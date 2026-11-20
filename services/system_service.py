@@ -23,23 +23,23 @@ class SystemService:
             normalized_action = action.capitalize()
             if sys.platform == "win32":
                 if normalized_action == "Sleep":
-                    os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+                    subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], check=False)
                 elif normalized_action == "Hibernate":
-                    os.system("shutdown /h")
+                    subprocess.run(["shutdown", "/h"], check=False)
                 else:
-                    os.system("shutdown /s /t 0")
+                    subprocess.run(["shutdown", "/s", "/t", "0"], check=False)
             elif sys.platform == "darwin":
                 if normalized_action == "Sleep":
-                    os.system("pmset sleepnow")
+                    subprocess.run(["pmset", "sleepnow"], check=False)
                 else:
-                    os.system("sudo shutdown -h now")
+                    subprocess.run(["osascript", "-e", 'tell app "System Events" to shut down'], check=False)
             else:
                 if normalized_action == "Sleep":
-                    os.system("systemctl suspend")
+                    subprocess.run(["systemctl", "suspend"], check=False)
                 elif normalized_action == "Hibernate":
-                    os.system("systemctl hibernate")
+                    subprocess.run(["systemctl", "hibernate"], check=False)
                 else:
-                    os.system("shutdown -h now")
+                    subprocess.run(["systemctl", "poweroff"], check=False)
             return True
         except Exception as execution_error:
             logger.error(f"Failed to execute system {action.lower()}: {execution_error}")
@@ -56,7 +56,8 @@ class SystemService:
             bool: True if launched successfully, False otherwise.
         """
         try:
-            normalized_directory_path = os.path.normpath(directory_path)
+            cleaned_directory_path = directory_path.strip().strip('"').strip("'").replace('"', "")
+            normalized_directory_path = os.path.normpath(cleaned_directory_path)
             if not os.path.exists(normalized_directory_path):
                 os.makedirs(normalized_directory_path, exist_ok=True)
 
@@ -72,7 +73,7 @@ class SystemService:
             return False
 
     @staticmethod
-    def open_file_or_folder(file_path: str, fallback_directory: str) -> bool:
+    def open_file_or_folder(file_path: str, fallback_directory: str = "") -> bool:
         """Opens the folder location and selects/highlights the file if it exists; otherwise opens the directory.
         
         Args:
@@ -83,10 +84,11 @@ class SystemService:
             bool: True if launched successfully, False otherwise.
         """
         try:
-            normalized_file_path = os.path.normpath(file_path)
+            cleaned_file_path = file_path.strip().strip('"').strip("'").replace('"', "")
+            normalized_file_path = os.path.normpath(cleaned_file_path)
             if os.path.exists(normalized_file_path):
                 if sys.platform == "win32":
-                    subprocess.Popen(f'explorer /select,"{normalized_file_path}"')
+                    subprocess.Popen(["explorer", f"/select,{normalized_file_path}"])
                 elif sys.platform == "darwin":
                     subprocess.Popen(["open", "-R", normalized_file_path])
                 else:
@@ -94,8 +96,22 @@ class SystemService:
                     subprocess.Popen(["xdg-open", parent_directory])
                 return True
             else:
-                return SystemService.open_directory(fallback_directory)
+                effective_fallback_directory = fallback_directory if fallback_directory else (os.path.dirname(normalized_file_path) or ".")
+                return SystemService.open_directory(effective_fallback_directory)
         except Exception as open_error:
             logger.error(f"Failed to open file or folder location for '{file_path}': {open_error}")
             return False
 
+    @staticmethod
+    def show_in_file_manager(file_path: str, fallback_directory: str = "") -> bool:
+        """Opens the folder location and selects/highlights the file in the OS file manager,
+        or opens the fallback directory if the file does not exist.
+        
+        Args:
+            file_path: Full path to the target file.
+            fallback_directory: Directory to open if the specific file does not exist.
+            
+        Returns:
+            bool: True if launched successfully, False otherwise.
+        """
+        return SystemService.open_file_or_folder(file_path, fallback_directory)
