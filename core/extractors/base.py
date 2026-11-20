@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional, Tuple
 
 class BaseExtractor(ABC):
     """
@@ -6,9 +7,9 @@ class BaseExtractor(ABC):
     """
 
     @abstractmethod
-    def extract_direct_url(self, link: str) -> str | None:
+    def extract_direct_url(self, link: str, file_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
         """
         Extract direct download URL from input link.
-        Returns the resolved direct URL string or None if failed.
+        Returns a tuple of (direct_url, error_message).
         """
         pass
