@@ -4,18 +4,28 @@ import os
 block_cipher = None
 
 # Automatically locate 7z.exe and 7z.dll from local directory or standard installation path
+missing_binaries = []
 binaries = []
 for binary_filename in ['7z.exe', '7z.dll']:
-    if os.path.exists(binary_filename):
-        binaries.append((binary_filename, '.'))
+    found_path = None
+    for candidate_path in [
+        binary_filename,
+        os.path.join(r'C:\Program Files\7-Zip', binary_filename),
+        os.path.join(r'C:\Program Files (x86)\7-Zip', binary_filename),
+    ]:
+        if os.path.exists(candidate_path):
+            found_path = candidate_path
+            break
+    if found_path:
+        binaries.append((found_path, '.'))
     else:
-        system_7z_path = os.path.join(r'C:\Program Files\7-Zip', binary_filename)
-        if os.path.exists(system_7z_path):
-            binaries.append((system_7z_path, '.'))
-        else:
-            system_7z_x86_path = os.path.join(r'C:\Program Files (x86)\7-Zip', binary_filename)
-            if os.path.exists(system_7z_x86_path):
-                binaries.append((system_7z_x86_path, '.'))
+        missing_binaries.append(binary_filename)
+
+if missing_binaries:
+    raise SystemExit(
+        f"[ERROR] Required 7-Zip binaries missing from build environment: {', '.join(missing_binaries)}. "
+        f"Please install 7-Zip or place 7z.exe and 7z.dll in the project root."
+    )
 
 data_files = [
     ('SilverSpoon.ico', '.'),

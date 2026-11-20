@@ -42,13 +42,13 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 * **Direct Link Extractor:** Automatically retrieves direct download links from supported hosters in the background.
 * **Multi-threading:** Downloads multiple parts concurrently (default 3 workers, customizable in Settings) to maximize bandwidth.
 * **Pause, Resume & Retry:** Safely pause your downloads, recover from network drops, or quickly retry errored links using HTTP `Range` headers.
-* **PyQt6 GUI & Headless CLI:** Clean graphical UI built with PyQt6 along with a lightweight CLI script (`downloader.py`) for headless automation.
+* **PyQt6 GUI:** Clean graphical UI built with PyQt6.
 
 ## Requirements & Tech Stack
 
 * **Language**: Python 3.10+ (Verified on Python 3.13)
 * **GUI Framework**: PyQt6 (`>= 6.11.0`)
-* **Session & Browser Automation**: `seleniumbase` (UC Mode) & `cloudscraper` (`>= 1.2.71`)
+* **Session & Browser Automation**: `seleniumbase` (UC Mode) & `curl_cffi`
 * **Extraction Engine**: 7-Zip engine (`7z.exe`/`7z.dll` on Windows, `/usr/bin/7z` on Unix)
 * **Build Tool**: PyInstaller (for standalone `.exe` executable builds)
 * **Verified Environment (This Fork)**: Windows 11 (tested and fully functional on host machine)
@@ -67,7 +67,8 @@ A Python-based bulk downloader designed for link extraction and multi-threaded f
 
 ## Usage
 
-### Using the GUI (Recommended)
+### Usage
+
 Launch the graphical interface (or double-click `SilverSpoon.exe`):
 ```bash
 python pyqt_downloader.py
@@ -85,15 +86,6 @@ python pyqt_downloader.py
 7. Click the green **Start / Resume** button to begin downloading.
 ![App Screenshot 3](assets/screenshot3.png)
 8. Use the **Pause** and **Start / Resume** buttons to manage your selected downloads at any time.
-
-### Using the CLI
-If you prefer the command line:
-1. Put your links into `link.txt` (one per line).
-2. Run the script:
-   ```bash
-   python downloader.py link.txt
-   ```
-*(Files will be downloaded to the current working directory).*
 
 ## Project Structure
 
