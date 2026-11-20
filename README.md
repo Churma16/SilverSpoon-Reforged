@@ -87,6 +87,15 @@ python pyqt_downloader.py
 ![App Screenshot 3](assets/screenshot3.png)
 8. Use the **Pause** and **Start / Resume** buttons to manage your selected downloads at any time.
 
+### Using the CLI
+If you prefer the command line:
+1. Put your links into `link.txt` (one per line).
+2. Run the script:
+   ```bash
+   python downloader.py link.txt
+   ```
+*(Files will be downloaded to the current working directory).*
+
 ## Project Structure
 
 * `core/` - Core download management, thread-safe rate limiting, session history, and auto-extraction logic.
