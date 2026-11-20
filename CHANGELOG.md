@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.7](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.6...v2.2.7) (2026-11-20)
+
+### Bug Fixes
+
+* **updater:** correct binary cleanup marker, semver ranking, thread re-entrancy, and extractor contracts ([#16](https://github.com/Churma16/SilverSpoon-Reforged/issues/16)) ([#20](https://github.com/Churma16/SilverSpoon-Reforged/issues/20)) ([a4511ee](https://github.com/Churma16/SilverSpoon-Reforged/commit/a4511ee5b405ba8d746144386d90f501ffe55d6c))
+
 ## [2.2.6](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.5...v2.2.6) (2026-11-20)
 
 ## [2.2.5](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.4...v2.2.5) (2026-10-25)
