@@ -90,3 +90,22 @@ def test_download_task_restore_active_state_safety():
     restored_task = DownloadTask.from_dict(raw_saved_data)
     assert restored_task.status == TaskStatus.PAUSED
     assert restored_task.pause_flag is True
+
+
+@pytest.mark.unit
+def test_download_task_url_query_params_and_sanitization():
+    base_directory = "C:/Downloads"
+
+    # URL with query params
+    task_with_query = DownloadTask("https://fuckingfast.co/c7o9muwfdksh?download=1&auth=xyz", base_directory)
+    assert task_with_query.file_id == "c7o9muwfdksh"
+    assert task_with_query.filename == "c7o9muwfdksh"
+
+    # URL with hash filename containing illegal characters
+    task_with_illegal = DownloadTask("https://fuckingfast.co/c7o9#file<name>:with*bad?chars.rar", base_directory)
+    assert "<" not in task_with_illegal.filename
+    assert ">" not in task_with_illegal.filename
+    assert ":" not in task_with_illegal.filename
+    assert "*" not in task_with_illegal.filename
+    assert "?" not in task_with_illegal.filename
+    assert task_with_illegal.filename == "file_name__with_bad_chars.rar"

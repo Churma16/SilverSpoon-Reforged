@@ -104,7 +104,7 @@ class DownloadController(QObject):
 
     def trigger_history_save(self):
         """Saves current tasks to persistent history file."""
-        save_history(self.tasks)
+        save_history(list(self.tasks))
 
     def add_session_downloaded_bytes(self, size: int):
         """Thread-safe increment of session downloaded bytes."""

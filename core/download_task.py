@@ -7,11 +7,13 @@ class DownloadTask:
         self.link = link.strip()
         self.base_save_dir = base_save_dir
         
-        raw_file_id = self.link.split('/')[-1].split('#')[0]
-        raw_filename = self.link.split('#')[-1] if '#' in self.link else raw_file_id
+        cleaned_url = self.link.split('#')[0].split('?')[0].rstrip('/')
+        raw_file_id = cleaned_url.split('/')[-1] if '/' in cleaned_url else cleaned_url
+        raw_filename = self.link.split('#', 1)[1] if '#' in self.link else raw_file_id
         
+        sanitized_filename = re.sub(r'[<>:"/\\|?*]', '_', os.path.basename(raw_filename))
         self.file_id = os.path.basename(raw_file_id)
-        self.filename = os.path.basename(raw_filename)
+        self.filename = sanitized_filename or "downloaded_file"
         
         if folder_name:
             self.folder_name = os.path.basename(folder_name)
@@ -38,6 +40,7 @@ class DownloadTask:
         
         self.pause_flag = False
         self.cancel_flag = False
+        self.is_active_worker = False
         self.tree_item = None
         self.is_selected = False
 
