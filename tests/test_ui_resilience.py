@@ -79,3 +79,36 @@ def test_reorderable_tree_normalize_structure_preserves_batch_children(qapp):
 
     assert batch_b.childCount() == 1
     assert batch_b.child(0).text(0) == "TaskB.rar"
+
+
+@pytest.mark.unit
+def test_load_initial_history_suppresses_completed_batch_notifications(qapp, monkeypatch, tmp_path):
+    from controllers.download_controller import DownloadController
+    from core.download_task import DownloadTask
+    from core.types import TaskStatus
+
+    completed_task = DownloadTask("https://fuckingfast.co/done01#File1.rar", str(tmp_path), folder_name="BatchDone")
+    completed_task.status = TaskStatus.FINISHED
+
+    failed_task = DownloadTask("https://fuckingfast.co/fail01#File2.rar", str(tmp_path), folder_name="BatchFail")
+    failed_task.status = TaskStatus.FAILED
+
+    pending_task = DownloadTask("https://fuckingfast.co/pend01#File3.rar", str(tmp_path), folder_name="BatchPending")
+    pending_task.status = TaskStatus.IN_QUEUE
+
+    monkeypatch.setattr("controllers.download_controller.load_history", lambda: [completed_task, failed_task, pending_task])
+    monkeypatch.setattr("controllers.download_controller.save_history", lambda tasks: None)
+
+    controller = DownloadController(str(tmp_path), settings={})
+    controller.load_initial_history()
+
+    # Completed and failed historical batches must be pre-marked to suppress startup notifications
+    assert "BatchDone" in controller.notified_batches
+    assert "BatchFail_err" in controller.notified_batches
+    assert "BatchPending" not in controller.notified_batches
+
+    # Retrying the failed task must clear the error notification suppression
+    controller.start_downloads([failed_task])
+    assert "BatchFail_err" not in controller.notified_batches
+    assert "BatchFail" not in controller.notified_batches
+

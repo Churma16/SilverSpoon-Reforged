@@ -3,7 +3,7 @@ import sys
 import time
 import threading
 import logging
-from typing import List, Set, Optional, Callable
+from typing import List, Set, Optional, Callable, Dict
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QSystemTrayIcon
 from curl_cffi import requests as cffi_requests
@@ -96,10 +96,25 @@ class DownloadController(QObject):
     def load_initial_history(self) -> List[DownloadTask]:
         """Loads persistent task history and registers into controller."""
         loaded_tasks = load_history()
+        batch_tasks_map: Dict[str, List[DownloadTask]] = {}
         for task in loaded_tasks:
+            if task.status in (TaskStatus.UNPACKING, "Extracting..."):
+                task.status = TaskStatus.FINISHED
             self.tasks.append(task)
             if task.status == TaskStatus.EXTRACTED:
                 self.extracted_folders.add(task.folder_name)
+
+            folder_name = getattr(task, 'folder_name', 'Default')
+            if folder_name not in batch_tasks_map:
+                batch_tasks_map[folder_name] = []
+            batch_tasks_map[folder_name].append(task)
+
+        for folder_name, folder_tasks in batch_tasks_map.items():
+            if all(t.status in (TaskStatus.FINISHED, TaskStatus.EXTRACTED) for t in folder_tasks):
+                self.notified_batches.add(folder_name)
+            elif any("Failed" in str(t.status) or "Error" in str(t.status) for t in folder_tasks):
+                self.notified_batches.add(folder_name + "_err")
+
         return self.tasks
 
     def trigger_history_save(self):
@@ -134,6 +149,9 @@ class DownloadController(QObject):
                 task.status = TaskStatus.IN_QUEUE
                 task.pause_flag = False
                 task.cancel_flag = False
+                folder_name = getattr(task, 'folder_name', 'Default')
+                self.notified_batches.discard(folder_name)
+                self.notified_batches.discard(folder_name + "_err")
 
     def pause_tasks(self, target_tasks: List[DownloadTask]):
         """Pauses the specified tasks."""
@@ -191,6 +209,9 @@ class DownloadController(QObject):
             task.error_message = ""
             task.status = TaskStatus.IN_QUEUE
             self.extracted_folders.discard(task.folder_name)
+            folder_name = getattr(task, 'folder_name', 'Default')
+            self.notified_batches.discard(folder_name)
+            self.notified_batches.discard(folder_name + "_err")
             redownloaded += 1
 
         self.trigger_history_save()
@@ -205,6 +226,7 @@ class DownloadController(QObject):
                 continue
 
             self.extracted_folders.discard(folder_name)
+            self.notified_batches.discard(folder_name)
             threading.Thread(target=self.extraction_manager.extract_folder, args=(folder_tasks,), daemon=True).start()
             reextracted_count += 1
         return reextracted_count
@@ -234,6 +256,11 @@ class DownloadController(QObject):
             if t in self.tasks:
                 self.tasks.remove(t)
                 self.task_removed.emit(t)
+        active_folders = {getattr(t, 'folder_name', 'Default') for t in self.tasks}
+        self.notified_batches = {
+            batch_name for batch_name in self.notified_batches
+            if batch_name.removesuffix("_err") in active_folders
+        }
         self.trigger_history_save()
         return to_remove
 
@@ -250,6 +277,9 @@ class DownloadController(QObject):
             if task.status in (TaskStatus.PAUSED, TaskStatus.STANDBY, TaskStatus.FAILED, TaskStatus.CANCELLED):
                 task.status = TaskStatus.IN_QUEUE
                 task.pause_flag = False
+                folder_name = getattr(task, 'folder_name', 'Default')
+                self.notified_batches.discard(folder_name)
+                self.notified_batches.discard(folder_name + "_err")
 
     def sync_tasks_order(self, ordered_tasks: List[DownloadTask]):
         """Updates internal tasks order."""

@@ -97,8 +97,6 @@ class MainWindow(QMainWindow):
         # Load initial persistent history into UI
         initial_tasks = self.download_controller.load_initial_history()
         for task in initial_tasks:
-            if task.status in (TaskStatus.UNPACKING, "Extracting..."):
-                task.status = TaskStatus.FINISHED
             self.tree_adapter.add_task_item(task)
 
         # Show warning dialog on startup if enabled
