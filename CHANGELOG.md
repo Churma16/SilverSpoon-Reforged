@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.8](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.7...v2.2.8) (2026-11-20)
+
+### Bug Fixes
+
+* **core:** resolve stream truncation, concurrency races, worker collision, and atomic persistence ([#15](https://github.com/Churma16/SilverSpoon-Reforged/issues/15)) ([#19](https://github.com/Churma16/SilverSpoon-Reforged/issues/19)) ([d202a45](https://github.com/Churma16/SilverSpoon-Reforged/commit/d202a454868f1788b7e332c156bcc4718c35b26c))
+
 ## [2.2.7](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.6...v2.2.7) (2026-11-20)
 
 ### Bug Fixes
