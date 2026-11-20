@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.9](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.8...v2.2.9) (2026-11-20)
+
+### Bug Fixes
+
+* **ui:** prevent UI freeze on webpage scrape, preserve settings, handle NaN ETA, and fix tree drag-drop ([#17](https://github.com/Churma16/SilverSpoon-Reforged/issues/17)) ([#21](https://github.com/Churma16/SilverSpoon-Reforged/issues/21)) ([286191d](https://github.com/Churma16/SilverSpoon-Reforged/commit/286191d9540d79d09a78b46373d3b9cd9f0c1322))
+
 ## [2.2.8](https://github.com/Churma16/SilverSpoon-Reforged/compare/v2.2.7...v2.2.8) (2026-11-20)
 
 ### Bug Fixes
