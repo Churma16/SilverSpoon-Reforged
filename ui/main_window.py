@@ -183,6 +183,8 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'timer') and self.timer.isActive():
             self.timer.stop()
+        if hasattr(self, 'scraper_thread') and self.scraper_thread.isRunning():
+            self.scraper_thread.wait(1000)
         self.download_controller.stop_download_manager()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
@@ -226,6 +228,8 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
         # Stop background services
+        if hasattr(self, 'scraper_thread') and self.scraper_thread.isRunning():
+            self.scraper_thread.wait(1000)
         self.download_controller.stop_download_manager()
 
         # Hide system tray icon to ensure Qt event loop exits cleanly
