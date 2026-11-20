@@ -17,7 +17,7 @@ def setup_menu_bar(window):
     file_menu.addSeparator()
     
     exit_action = QAction("&Exit", window)
-    exit_action.triggered.connect(window.close)
+    exit_action.triggered.connect(window.force_quit)
     file_menu.addAction(exit_action)
     
     # Help Menu

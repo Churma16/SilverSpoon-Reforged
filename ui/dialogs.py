@@ -238,7 +238,8 @@ class SettingsDialog(QDialog):
             self.current_settings["show_warning_dialog"] = True
 
     def get_updated_settings(self):
-        return {
+        updated = dict(self.current_settings)
+        updated.update({
             "default_save_dir": self.dir_input.text(),
             "max_workers": self.workers_spinbox.value(),
             "download_speed_limit": self.speed_limit_spinbox.value(),
@@ -247,10 +248,8 @@ class SettingsDialog(QDialog):
             "enable_notifications": self.notifications_checkbox.isChecked(),
             "minimize_to_tray": self.minimize_tray_checkbox.isChecked(),
             "auto_check_updates": self.auto_update_checkbox.isChecked(),
-            "column_widths": self.current_settings.get("column_widths", {}),
-            "show_warning_dialog": self.current_settings.get("show_warning_dialog", True),
-            "last_update_check": self.current_settings.get("last_update_check", 0.0)
-        }
+        })
+        return updated
 
 
 class PrivacyPolicyDialog(QDialog):

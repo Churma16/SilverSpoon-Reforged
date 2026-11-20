@@ -434,10 +434,13 @@ class MainWindow(QMainWindow):
             target_url = web_urls[0]
             try:
                 scraper = cffi_requests.Session(impersonate="chrome")
-                res = scraper.get(target_url, timeout=15)
-                if res.status_code == 200:
-                    page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
-                    ff_links = list(dict.fromkeys([u.rstrip('"\';>,') for u in page_ff_urls]))
+                try:
+                    res = scraper.get(target_url, timeout=15)
+                    if res.status_code == 200:
+                        page_ff_urls = re.findall(r'https?://fuckingfast\.co/[^\s"<>\']+', res.text)
+                        ff_links = list(dict.fromkeys([u.rstrip('"\';>,') for u in page_ff_urls]))
+                finally:
+                    scraper.close()
             except Exception as e:
                 QMessageBox.critical(self, "Link Extractor Error", f"Failed to extract webpage links:\n{e}")
                 return

@@ -122,14 +122,16 @@ class ReorderableTreeWidget(QTreeWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
 
     def dragMoveEvent(self, event):
         target_item = self.itemAt(event.position().toPoint())
-        # If target item is a child task (has a parent), prevent dropping directly onto it as a parent container
-        if target_item and target_item.parent() is not None:
-            if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
-                event.ignore()
-                return
+        # Prevent dropping directly onto any item (only allow reordering above/below or on viewport)
+        if target_item is not None and self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
+            event.ignore()
+            return
         super().dragMoveEvent(event)
 
     def dropEvent(self, event):
