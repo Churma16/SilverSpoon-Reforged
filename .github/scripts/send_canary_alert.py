@@ -24,8 +24,13 @@ def dispatch_canary_failure_alert():
     else:
         summary_content = (
             "<b>Reason:</b>\n"
-            "Live link extraction probe failed without generating a detailed summary. "
-            "The file host service may have updated their download page structure or challenge layout."
+            "CI test runner or pipeline failed before completing the extraction probe (no error summary generated).\n\n"
+            "<b>Possible Causes:</b>\n"
+            "• Pytest configuration or marker mismatch (e.g., exit code 5: no tests collected)\n"
+            "• Test environment, dependency, or virtual display setup failure\n"
+            "• Script crash or unhandled exception prior to probe evaluation\n\n"
+            "<b>Recommended Action:</b>\n"
+            "Inspect the GitHub Actions step run log to diagnose the runner or execution error."
         )
 
     alert_message = (
